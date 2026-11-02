@@ -15,7 +15,6 @@ function asSearchType(value: unknown): SearchType {
 export async function registerCatalogRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/catalog/search", async (request, reply) => {
     try {
-      requireUserId(request);
       const query = request.query as Record<string, unknown>;
       const term = str(query.q).trim();
       if (!term) throw new ApiError(400, "QUERY_REQUIRED", "QUERY_REQUIRED");
@@ -30,7 +29,6 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/tracks/:id", async (request, reply) => {
     try {
-      requireUserId(request);
       const { id } = request.params as { id: string };
 
       const rows = await sql`select * from tracks where id = ${id} limit 1`;
@@ -58,7 +56,6 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/albums/:id", async (request, reply) => {
     try {
-      requireUserId(request);
       const { id } = request.params as { id: string };
       const album = await browseAlbum(id);
       if (!album) throw new ApiError(404, "ALBUM_NOT_FOUND", "ALBUM_NOT_FOUND");
@@ -70,7 +67,6 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/artists/:id", async (request, reply) => {
     try {
-      requireUserId(request);
       const { id } = request.params as { id: string };
       const artist = await browseArtist(id);
       if (!artist) throw new ApiError(404, "ARTIST_NOT_FOUND", "ARTIST_NOT_FOUND");
@@ -82,7 +78,6 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/playlists/:id", async (request, reply) => {
     try {
-      requireUserId(request);
       const { id } = request.params as { id: string };
       const playlist = await browsePlaylist(id);
       if (!playlist) throw new ApiError(404, "PLAYLIST_NOT_FOUND", "PLAYLIST_NOT_FOUND");
