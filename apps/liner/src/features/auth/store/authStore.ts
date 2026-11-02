@@ -12,6 +12,7 @@ import {
 import { playerEngine } from "@/features/player";
 import { queryCache } from "@/shared/cache/queryCache";
 import { clearScreenCache } from "@/shared/cache/screenCache";
+import { useSearchHistoryStore } from "@/features/search/store/searchHistoryStore";
 
 export type AuthStatus = "initializing" | "authenticated" | "anonymous";
 export type AuthState = {
@@ -102,8 +103,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   login: async (email, password) => {
+    await clearPlayback();
     queryCache.clear();
     clearScreenCache();
+    useSearchHistoryStore.getState().clearHistory();
     const result = await api.login(email, password);
     set({ status: "authenticated", user: result.user });
     if (typeof window !== "undefined") {
@@ -111,8 +114,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   register: async (email, password, username, displayName) => {
+    await clearPlayback();
     queryCache.clear();
     clearScreenCache();
+    useSearchHistoryStore.getState().clearHistory();
     const result = await api.register(email, password, username, displayName);
     set({ status: "authenticated", user: result.user });
     if (typeof window !== "undefined") {
@@ -132,6 +137,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   logout: async () => {
     await clearPlayback();
+    useSearchHistoryStore.getState().clearHistory();
     try {
       window.linerElectron?.closeOverlay?.();
       window.linerElectron?.sendOverlayAction?.({ type: "closeOverlay" });
