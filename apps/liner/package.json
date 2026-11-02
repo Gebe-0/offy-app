@@ -77,7 +77,6 @@
     },
     "win": {
       "executableName": "offy",
-      "publisherName": "GEBE - OFFY",
       "icon": "build/icon.ico",
       "target": [
         "nsis"
