@@ -14,12 +14,13 @@ export function SidebarJamButton() {
       <button
         type="button"
         aria-label={tooltipLabel}
+        aria-pressed={Boolean(jamCode)}
         onClick={openJamModal}
         className="group relative inline-flex items-center justify-center bg-transparent border-0 p-0 cursor-pointer active:scale-[0.96] transition-transform duration-100"
       >
         <div className="relative">
           <GroupLine
-            size={24}
+            size={26}
             className={cn(
               "relative z-10 transition-opacity duration-150 ease-out",
               jamCode

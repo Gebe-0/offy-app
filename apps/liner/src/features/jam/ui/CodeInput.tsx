@@ -1,12 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface CodeInputProps {
   value: string;
   onChange: (value: string) => void;
+  onComplete?: (value: string) => void;
   disabled?: boolean;
 }
 
-export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
+export function CodeInput({
+  value,
+  onChange,
+  onComplete,
+  disabled,
+}: CodeInputProps) {
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const chars = Array.from({ length: 6 }, (_, i) => value[i] || "");
@@ -42,6 +49,11 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
     nextArr[index] = char;
     const nextStr = nextArr.join("").slice(0, 6);
     onChange(nextStr);
+
+    // Se preencheu todos os 6 caracteres
+    if (nextStr.length === 6) {
+      onComplete?.(nextStr);
+    }
 
     // Avança para o próximo input
     if (index < 5) {
@@ -102,6 +114,9 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
 
     if (clean) {
       onChange(clean);
+      if (clean.length === 6) {
+        onComplete?.(clean);
+      }
       const focusIndex = Math.min(clean.length, 5);
       inputRefs.current[focusIndex]?.focus();
     }
@@ -114,34 +129,61 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
   };
 
   return (
-    <div className="flex items-center justify-center gap-[12px] my-[10px] select-none">
+    <div
+      className="flex items-center justify-center gap-[14px] my-[12px] select-none cursor-pointer"
+      onClick={() => {
+        const nextEmpty = chars.findIndex((c) => !c);
+        const target = nextEmpty === -1 ? 5 : nextEmpty;
+        inputRefs.current[target]?.focus();
+      }}
+    >
       {Array.from({ length: 6 }).map((_, i) => {
         const char = chars[i];
         const isFilled = Boolean(char);
+        const isFocused = focusedIndex === i;
 
         return (
-          <div key={i} className="flex flex-col items-center w-[44px]">
+          <div
+            key={i}
+            className="flex flex-col items-center w-[42px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              inputRefs.current[i]?.focus();
+            }}
+          >
             <input
               ref={(el) => {
                 inputRefs.current[i] = el;
               }}
               type="text"
+              inputMode="text"
+              autoCapitalize="characters"
+              autoComplete="one-time-code"
               maxLength={1}
               value={char}
+              placeholder="0"
               disabled={disabled}
+              onFocus={(e) => {
+                setFocusedIndex(i);
+                e.target.select();
+              }}
+              onBlur={() => {
+                setFocusedIndex((prev) => (prev === i ? null : prev));
+              }}
               onChange={(e) => handleChange(i, e)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               onPaste={handlePaste}
-              onFocus={(e) => e.target.select()}
-              className="w-full text-center bg-transparent border-0 outline-none text-[34px] font-bold text-text-primary font-mono tracking-tight cursor-pointer focus:cursor-text"
+              className="w-full text-center bg-transparent border-0 outline-none text-[38px] font-bold text-text-primary placeholder:text-text-secondary/25 font-sans tracking-tight cursor-pointer focus:cursor-text select-none leading-none h-[48px]"
               style={{ caretColor: "transparent" }}
             />
             {/* Linha sublinhada estilizada idêntica à imagem de referência */}
             <div
-              className={`h-[2.5px] w-full rounded-full transition-all duration-200 ${
-                isFilled
-                  ? "bg-text-primary shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                  : "bg-white/20"
+              className={`h-[2px] w-full rounded-full transition-all duration-200 ${
+                isFocused
+                  ? "bg-text-primary shadow-[0_0_10px_rgba(255,255,255,0.6)] scale-x-105"
+                  : isFilled
+                    ? "bg-text-primary/90"
+                    : "bg-text-secondary/30"
               }`}
             />
           </div>

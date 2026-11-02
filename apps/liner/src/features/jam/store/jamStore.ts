@@ -124,10 +124,32 @@ export const useJamStore = create<JamState>((set, get) => ({
   },
 
   joinJam: async (rawCode: string) => {
-    const cleanCode = rawCode
-      .trim()
+    let text = rawCode.trim();
+    try {
+      if (
+        text.includes("://") ||
+        text.startsWith("offy:") ||
+        text.startsWith("http")
+      ) {
+        const u = new URL(text);
+        const idParam = u.searchParams.get("id");
+        if (idParam) {
+          text = idParam;
+        } else {
+          const parts = u.pathname.split("/").filter(Boolean);
+          if (parts.length > 0) {
+            text = parts[parts.length - 1]!;
+          }
+        }
+      }
+    } catch {
+      // ignore url error
+    }
+    const match = text.match(/([A-Z0-9]{6})/i);
+    const cleanCode = (match ? match[1]! : text.replace(/[^A-Z0-9]/g, ""))
       .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
+      .slice(0, 6);
+
     if (cleanCode.length !== 6) {
       set({ error: "O código da Jam deve ter exatamente 6 dígitos." });
       return false;
@@ -721,9 +743,11 @@ usePlayerStore.subscribe((state, prev) => {
     return;
   }
 
-  // Seek disparado (diferença maior que 1.8 segundos sem transição de status)
+  // Seek disparado (salto manual para trás ou mais de 3 segundos para frente)
+  const isBackwardSeek = state.positionMs < prev.positionMs - 500;
+  const isForwardJump = state.positionMs > prev.positionMs + 3000;
   if (
-    Math.abs(state.positionMs - prev.positionMs) > 1800 &&
+    (isBackwardSeek || isForwardJump) &&
     Math.abs(Date.now() - lastSyncTimestamp) > 800
   ) {
     lastSyncTimestamp = Date.now();
