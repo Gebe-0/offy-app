@@ -11,6 +11,7 @@ import { registerHistoryRoutes } from "./routes/history.js";
 import { registerLyricsRoutes } from "./routes/lyrics.js";
 import { registerRecommendationRoutes } from "./routes/recommendations.js";
 import { registerPresenceRoutes } from "./routes/presence.js";
+import { registerJamRoutes } from "./routes/jam.js";
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? "info" },
@@ -38,6 +39,7 @@ await app.register(registerHistoryRoutes);
 await app.register(registerLyricsRoutes);
 await app.register(registerRecommendationRoutes);
 await app.register(registerPresenceRoutes);
+await app.register(registerJamRoutes);
 
 app.setErrorHandler((error, request, reply) => {
   request.log.error({ err: error }, "request failed");

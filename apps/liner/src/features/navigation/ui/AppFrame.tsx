@@ -68,6 +68,7 @@ import {
   useHasPageBackdrop,
   useEffectiveCoverGlow,
 } from "@/features/settings";
+import { JamModal } from "@/features/jam";
 import { UpdateModal, UpdateToastBridge } from "@/features/updater";
 import { YoutubeSignInNotice } from "@/features/youtube-auth";
 import { useOfflineModeStore } from "@/features/connectivity";
@@ -99,6 +100,7 @@ const AppOverlays = memo(function AppOverlays() {
       <ImportReviewModal />
       <LocalDropZone />
       <SettingsModal />
+      <JamModal />
       <UpdateModal />
       <YoutubeSignInNotice />
       <UpdateToastBridge />

@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, toClientTrack } from "@/shared/api";
 import { playerEngine } from "@/features/player";
+import { useJamStore } from "@/features/jam";
 
 interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
+  type: "artist" | "album" | "playlist" | "track" | "jam";
   id: string;
 }
 
@@ -39,6 +40,11 @@ export default function DeeplinkHandler() {
                 track.coverUrl,
               );
               navigate("/player");
+              break;
+            }
+            case "jam": {
+              void useJamStore.getState().joinJam(target.id);
+              useJamStore.getState().openModal();
               break;
             }
           }

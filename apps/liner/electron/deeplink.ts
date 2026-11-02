@@ -17,10 +17,12 @@ const DEEP_LINK_IDS: Record<string, RegExp> = {
   playlist: /^[A-Za-z0-9_-]{8,64}$/,
   // youtube video ids are always 11 base64url chars
   track: /^[A-Za-z0-9_-]{11}$/,
+  // jam session 6-char code
+  jam: /^[A-Za-z0-9]{6}$/,
 };
 
 export interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
+  type: "artist" | "album" | "playlist" | "track" | "jam";
   id: string;
 }
 
@@ -35,12 +37,17 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
   const type = url.hostname.toLowerCase();
   const pattern = DEEP_LINK_IDS[type];
   if (!pattern) return null;
-  // exactly one id param, extras rejected so ?id=a&id=b can't pick a winner
+  
+  let id = "";
   const ids = url.searchParams.getAll("id");
-  if (ids.length !== 1) return null;
-  const id = ids[0]!;
-  if (!pattern.test(id)) return null;
-  return { type: type as DeeplinkTarget["type"], id };
+  if (ids.length === 1 && ids[0]) {
+    id = ids[0];
+  } else if (url.pathname && url.pathname.length > 1) {
+    id = url.pathname.replace(/^\/+/, "").split("/")[0] ?? "";
+  }
+
+  if (!id || !pattern.test(id)) return null;
+  return { type: type as DeeplinkTarget["type"], id: type === "jam" ? id.toUpperCase() : id };
 }
 
 export function findDeeplinkArg(argv: string[]): string | undefined {
