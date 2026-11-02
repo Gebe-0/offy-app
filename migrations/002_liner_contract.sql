@@ -1,4 +1,4 @@
--- OFFY — schema alinhado ao contrato do cliente Liner.
+-- OFFY — schema alinhado ao contrato da aplicação.
 -- Roda na URL DIRETA do Neon (sem pooler).
 
 drop table if exists playback_events cascade;

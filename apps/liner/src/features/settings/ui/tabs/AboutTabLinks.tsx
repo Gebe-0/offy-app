@@ -1,5 +1,4 @@
 import { Book2, QuestionCircle } from "@solar-icons/react";
-import { getApiBaseUrl } from "@/shared/api";
 import { showToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 
@@ -7,14 +6,15 @@ export function AboutTabLinks() {
   const { t } = useTranslation();
 
   const handleOpenDocs = () => {
-    const url = `${getApiBaseUrl()}/docs`;
+    const url = "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md";
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleOpenSupport = () => {
     void navigator.clipboard?.writeText("@arlw_").catch(() => {});
     showToast.checkmark("Discord copiado: @arlw_! Abrindo suporte...");
-    const url = `${getApiBaseUrl()}/docs#suporte`;
+    const url =
+      "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md#10-suporte-e-comunidade";
     window.open(url, "_blank", "noopener,noreferrer");
   };
 

@@ -40,18 +40,20 @@ function originOf(url: string | undefined): string | null {
 }
 
 export function parseNetSimulation(env: {
+  OFFY_SIMULATE?: string;
   LINER_SIMULATE?: string;
+  OFFY_SIMULATE_COUNTRY?: string;
   LINER_SIMULATE_COUNTRY?: string;
   VITE_API_URL?: string;
 }): NetSimulation | null {
-  const names = (env.LINER_SIMULATE ?? "")
+  const names = (env.OFFY_SIMULATE ?? env.LINER_SIMULATE ?? "")
     .split(",")
     .map((name) => name.trim().toLowerCase())
     .filter(Boolean);
   const unknown = names.filter((name) => !(name in SCENARIOS));
   if (unknown.length > 0)
     throw new Error(
-      `unknown LINER_SIMULATE scenario: ${unknown.join(", ")} (use ${SIMULATION_SCENARIOS.join(", ")})`,
+      `unknown simulation scenario: ${unknown.join(", ")} (use ${SIMULATION_SCENARIOS.join(", ")})`,
     );
   if (names.length === 0) return null;
   const sim: NetSimulation = {
@@ -62,7 +64,9 @@ export function parseNetSimulation(env: {
     linerOrigins: [],
   };
   for (const name of names) Object.assign(sim, SCENARIOS[name]);
-  const country = env.LINER_SIMULATE_COUNTRY?.trim().toUpperCase();
+  const country = (env.OFFY_SIMULATE_COUNTRY ?? env.LINER_SIMULATE_COUNTRY)
+    ?.trim()
+    .toUpperCase();
   if (country && COUNTRY_RE.test(country)) sim.country = country;
   const apiOrigin = originOf(env.VITE_API_URL);
   if (apiOrigin) sim.linerOrigins.push(apiOrigin);

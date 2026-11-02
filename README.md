@@ -1,32 +1,66 @@
-# OFFY
+# 🎵 OFFY Music Player
 
-Backend próprio + cliente Liner, zero custo de infraestrutura.
+<div align="center">
+
+<img src="./.github/assets/logo.png" width="96" alt="OFFY Logo" />
+
+### Reprodutor musical desktop ultrarrápido, livre de anúncios e com sincronização coletiva.
+
+[![Versão](https://img.shields.io/badge/Versão-0.1.0-E11D48?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
+[![Documentação](https://img.shields.io/badge/Documentação-DOCUMENTATION.md-3B82F6?style=for-the-badge)](./DOCUMENTATION.md)
+[![Suporte Discord](https://img.shields.io/badge/Suporte%20Discord-@arlw__-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com)
+[![Editor](https://img.shields.io/badge/Editor-GEBE--OFFY-10B981?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
+
+[📖 Ler Documentação Completa](./DOCUMENTATION.md) • [🎧 Sistema de Jam](./DOCUMENTATION.md#4-sistema-de-jam-sessões-coletivas-em-tempo-real) • [🎛️ Equalizador 10-Bandas](./DOCUMENTATION.md#3-equalizador-de-10-bandas-velocidade-e-pitch) • [💬 Suporte (@arlw_)](./DOCUMENTATION.md#10-suporte-e-comunidade)
+
+</div>
+
+---
+
+## 🌟 Destaques do OFFY
+
+- **Zero Anúncios & Zero Rastreamento:** Audição limpa, ininterrupta e sem telemetria abusiva.
+- **OFFY Jam (Ouvir Junto):** Sessões em grupo em tempo real com código de convite, permissões de controle e sincronização SSE anti-drift.
+- **Equalizador Paramétrico de 10 Bandas:** Controle cirúrgico de frequências (32 Hz a 16 kHz), presets sonoros e controle de velocidade/pitch.
+- **Letras Word-Level (Karaokê):** Pipeline inteligente de provedores (`bLyrics`, `Unison`, `LRCLIB`) com visualizador Fullscreen e shaders WebGL dinâmicos.
+- **Biblioteca e Isolamento de Contas:** Perfis 100% isolados, sem vazamento de histórico, curtidas ou mixes diários.
+- **Discord Rich Presence:** Integração nativa com Discord exibindo status ao vivo e sessão Jam.
+
+---
+
+## 🏗️ Estrutura do Monorepo
 
 ```
-new-app/
-  apps/api        Fastify + Postgres (Neon) — auth, catálogo, biblioteca, social, letras
-  apps/liner      Cliente desktop (Electron + React) do repositório Liner
-  packages/core   InnerTube (busca, browse, player), letras (LRCLIB)
-  packages/contracts  Tipos compartilhados do contrato HTTP
-  migrations      SQL versionado (001, 002, 003)
-  scripts         migrate.mjs, static.mjs
+offy/
+├── apps/
+│   ├── api/            # Fastify + PostgreSQL (Neon) — auth, catálogo, biblioteca, social, letras, jam
+│   └── client/         # Cliente desktop OFFY (Electron + React + TypeScript + Tailwind)
+├── packages/
+│   ├── core/           # InnerTube (busca, browse, streaming de alta qualidade), letras
+│   └── contracts/      # Contratos e tipos compartilhados da API (TypeScript)
+├── migrations/         # Migrações versionadas do PostgreSQL (001, 002, 003...)
+├── scripts/            # Scripts de automação (migrate.mjs, clear-cache.mjs)
+└── DOCUMENTATION.md    # Guia e documentação técnica oficial de todo o ecossistema
 ```
 
-## Como o áudio funciona
+---
 
-O catálogo e o áudio são resolvidos **no cliente** (como no Liner original):
-`clientCatalog` fala com o InnerTube, e o servidor só é usado como fallback.
-Isso significa que não existe endpoint de playback na API — e não é preciso
-mintar PO token no servidor.
+## 🔊 Como o Áudio Funciona
 
-Perfis InnerTube usados (validados): `WEB_REMIX` para catálogo,
-`VISIONOS` e `ANDROID_VR` para áudio. WEB_REMIX responde `UNPLAYABLE` para
-playback sem PO token, por isso os perfis de app entram como fallback.
+O catálogo e o áudio são resolvidos **diretamente no cliente**:
+`clientCatalog` comunica-se com o InnerTube, e o servidor atua exclusivamente como facilitador e fallback.
+Isso significa que não existe gargalo de tráfego de áudio na API — e não é preciso mintar PO token no servidor.
 
-## Letras — mesmo pipeline do Liner
+Perfis InnerTube utilizados e validados:
 
-O backend roda o **mesmo chain de providers** que o Liner usava, via
-`@braccato/provider-blyrics`:
+- `WEB_REMIX` para catálogo e buscas.
+- `VISIONOS` e `ANDROID_VR` para áudio com máxima taxa de bits e sem restrições.
+
+---
+
+## 🎤 Letras — Pipeline de Alta Precisão
+
+O backend roda o mesmo chain de providers de alto padrão via `@braccato/provider-blyrics`:
 
 ```
 blyrics → unison → binimum → portato → legato → lrclib-synced → lrclib-plain
@@ -34,42 +68,42 @@ Better     Unison   BiniLyrics  QQ Music  Kugou     LRCLIB        LRCLIB plain
 Lyrics
 ```
 
-- `blyrics` entrega **word-level** (TTML): cada palavra com timestamp.
-- O chain para no primeiro provider que acerta — os seguintes nem são chamados.
-- `GET /v1/tracks/:id/lyrics` responde **SSE** com um evento por provider
-  (`found` / `not_found`) e um `done` com o melhor resultado. O cliente monta
-  o seletor de providers com esses eventos.
-- Se já houver resultado em `lyrics_cache` (TTL 7 dias), responde JSON com
-  `cached: true` em vez do stream.
-- O `videoId` é passado ao provider Unison, que casa pela faixa exata do YouTube.
+- `blyrics` entrega letras **palavra por palavra** (TTML) com timestamps ultraprecisos.
+- O chain para no primeiro provider que encontra a faixa — otimizando velocidade e tráfego.
+- `GET /v1/tracks/:id/lyrics` responde via **Server-Sent Events (SSE)** em tempo real.
+- Cache inteligente em PostgreSQL com TTL de 7 dias para respostas em menos de 20 ms.
 
-Validado: `Never Gonna Give You Up`, `Despacito` e `Shape of You` retornam
-word-level em 200–500 ms, 58–95 linhas.
+---
 
-
-## Rodar local
+## 🚀 Como Executar Localmente
 
 ```bash
-# 1. banco
+# 1. Executar migrações do banco
 node scripts/migrate.mjs
 
-# 2. API
+# 2. Iniciar a API
 pnpm --filter @offy/api build
 pnpm --filter @offy/api start        # http://127.0.0.1:8787
 
-# 3. cliente
-cd apps/liner
-pnpm install
-pnpm build
-pnpm exec electron-builder --win --x64
-# instalador em release/OFFY-Setup-0.1.0.exe
+# 3. Iniciar o cliente desktop
+pnpm --filter @offy/client install
+pnpm --filter @offy/client dev
 ```
 
-## Variáveis
+### Build do Instalador Windows (NSIS)
 
-`.env` na raiz (API):
-
+```bash
+pnpm --filter @offy/client electron:build:win
+# Instalador gerado em release/OFFY-Setup-0.1.0.exe
 ```
+
+---
+
+## ⚙️ Variáveis de Ambiente
+
+### `.env` na raiz (API):
+
+```env
 DATABASE_URL=postgresql://...-pooler.../neondb?sslmode=require
 DATABASE_URL_DIRECT=postgresql://.../neondb?sslmode=require
 PORT=8787
@@ -78,64 +112,35 @@ AUTH_SECRET=<32 bytes hex>
 CORS_ORIGIN=*
 ```
 
-`apps/liner/.env` (cliente, lido em build time):
+### Configuração do Cliente (.env):
 
+```env
+VITE_API_URL=https://offy-api-fp82.onrender.com
 ```
-VITE_API_URL=http://127.0.0.1:8787
-```
 
-Trocar `VITE_API_URL` e **recompilar** o cliente é o único passo para apontar
-o app ao servidor público.
+---
 
-## Deploy
+## 🧪 Testes e Validação
 
 ```bash
-docker compose up -d --build
+pnpm --filter @offy/api exec tsx src/e2e.ts          # Testes E2E da API
+pnpm --filter @offy/api exec tsx src/lyrics-test.ts  # Teste do pipeline de letras
+node scripts/clear-lyrics-cache.mjs                  # Limpeza do cache de letras
 ```
 
-`docker-compose.yml` sobe a API em `:8080` e o Caddy com TLS automático
-(`SITE_ADDRESS` no `.env`: domínio próprio ou `ip.sslip.io`).
+---
 
-Koyeb: build direto pelo `Dockerfile`, porta `8080`, variáveis do `.env`.
+## 💬 Suporte e Contato
 
-## Endpoints
+Dúvidas, suporte técnico direto ou sugestões:
 
-Auth: `POST /v1/auth/{challenge,register,login,refresh,logout}`, `GET /v1/me`.
-`challenge` responde 404 de propósito — desliga proof-of-work.
+- **Discord do Desenvolvedor:** **`@arlw_`**
+- **Guia Completo:** Consulte o [DOCUMENTATION.md](./DOCUMENTATION.md) para detalhes de atalhos, arquitetura, equalizador e soluções de problemas.
 
-Catálogo: `GET /v1/catalog/{search,tracks/:id,albums/:id,artists/:id,playlists/:id}`.
+---
 
-Biblioteca: `GET/PUT/DELETE /v1/me/library/tracks[/:id]`,
-`GET/PUT/DELETE /v1/me/library/{albums,artists,playlists}[/:id]`.
+<div align="center">
 
-Playlists: `GET/POST /v1/me/playlists`, `GET/PATCH/DELETE /v1/me/playlists/:id`,
-`POST /v1/me/playlists/:id/tracks/:trackId`, `POST /v1/me/playlists/:id/tracks`,
-`DELETE .../items/:itemId`, `POST .../items/:itemId/move`.
+Desenvolvido por **GEBE - OFFY** • 2026
 
-Social: `GET /v1/users/search`, `GET/PATCH /v1/users/me`, `GET /v1/users/:id`,
-`POST/DELETE /v1/users/:id/follow`, `GET /v1/users/:id/{followers,following,playlists,history}`.
-
-Histórico: `POST /v1/me/playback/events`, `GET /v1/me/history`.
-Explore: `GET /v1/explore/{popular,popular/albums,most-saved}`.
-Leaderboards: `GET /v1/leaderboards/{global,artist/:id}`.
-Presença: `POST /v1/presence/heartbeat`, `GET /v1/presence`, `DELETE /v1/presence`.
-Letras: `GET /v1/tracks/:id/lyrics` (SSE), `GET /v1/me/lyrics/search`.
-Recomendações: `GET /v1/me/recommendations/daily-mixes`.
-
-## Testes
-
-```bash
-pnpm --filter @offy/api exec tsx src/e2e.ts          # 28 checagens da API
-pnpm --filter @offy/api exec tsx src/lyrics-test.ts  # chain de letras
-node scripts/clear-lyrics-cache.mjs                  # zera o cache de letras
-```
-
-## Notas de operação
-
-- Neon free suspende após ~5 min de inatividade (cold start 300–800 ms).
-  Um ping em `/health` a cada 5 min resolve.
-- `prepare: false` na conexão é obrigatório com o pooler do Neon.
-- `channel_binding=require` quebra o driver `pg` (não implementa SCRAM-PLUS).
-  Remova esse parâmetro da URL.
-- O instalador gerado aponta para `127.0.0.1:8787`. Para distribuir, defina
-  `VITE_API_URL` com o host público e recompile.
+</div>

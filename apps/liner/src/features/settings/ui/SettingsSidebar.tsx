@@ -4,7 +4,6 @@ import { Book2, QuestionCircle } from "@solar-icons/react";
 import { useScrollFade } from "@/shared/hooks";
 import TextInput from "@/shared/ui/TextInput";
 import { useTranslation } from "@/languages";
-import { getApiBaseUrl } from "@/shared/api";
 import { showToast } from "@/shared/ui";
 import { SettingsUserFooter } from "./SettingsUserFooter";
 import {
@@ -100,7 +99,8 @@ export function SettingsSidebar<T extends string>({
             icon={Book2}
             label={t("settings.docs")}
             onClick={() => {
-              const url = `${getApiBaseUrl()}/docs`;
+              const url =
+                "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md";
               window.open(url, "_blank", "noopener,noreferrer");
             }}
           />
@@ -112,7 +112,8 @@ export function SettingsSidebar<T extends string>({
               showToast.checkmark(
                 "Discord copiado: @arlw_! Abrindo suporte...",
               );
-              const url = `${getApiBaseUrl()}/docs#suporte`;
+              const url =
+                "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md#10-suporte-e-comunidade";
               window.open(url, "_blank", "noopener,noreferrer");
             }}
           />

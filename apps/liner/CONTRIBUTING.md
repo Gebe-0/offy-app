@@ -46,7 +46,7 @@ pnpm dev
 
 ### Simulating outages
 
-Set `LINER_SIMULATE` before `pnpm dev`, or put it in `.env.local`, to test how the app behaves when YouTube or OFFY's servers fail. Packaged builds ignore it.
+Set `OFFY_SIMULATE` before `pnpm dev`, or put it in `.env.local`, to test how the app behaves when YouTube or OFFY's servers fail. Packaged builds ignore it.
 
 | Value             | Effect                                                                                                                 |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -56,7 +56,7 @@ Set `LINER_SIMULATE` before `pnpm dev`, or put it in `.env.local`, to test how t
 | `offy-timeout`    | Requests to `*.tryoffy.fun` and `VITE_API_URL` hang until the caller gives up.                                         |
 | `offy-down`       | Requests to `*.tryoffy.fun` and `VITE_API_URL` fail at once.                                                           |
 
-Combine values with commas, for example `LINER_SIMULATE=offy-down,youtube-blocked`. `LINER_SIMULATE_COUNTRY=RU` makes the network probe report that country, which the "YouTube isn't available in …" modal names. To test the device-offline modal, open DevTools (`Ctrl+Shift+I`), choose Network, then Offline, or turn off Wi-Fi. The switch lives in `electron/netsim/` and cancels matching requests in the default session, so renderer fetches, `<audio>` streams and main-process `net.fetch` calls all see the failure. Node `fetch` calls in the main process, such as the bundle updater, are not affected.
+Combine values with commas, for example `OFFY_SIMULATE=offy-down,youtube-blocked`. `OFFY_SIMULATE_COUNTRY=RU` makes the network probe report that country, which the "YouTube isn't available in …" modal names. To test the device-offline modal, open DevTools (`Ctrl+Shift+I`), choose Network, then Offline, or turn off Wi-Fi. The switch lives in `electron/netsim/` and cancels matching requests in the default session, so renderer fetches, `<audio>` streams and main-process `net.fetch` calls all see the failure. Node `fetch` calls in the main process, such as the bundle updater, are not affected.
 
 Packaging is optional. You only need it when the change is in the installer or the packaged window:
 

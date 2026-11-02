@@ -766,13 +766,17 @@ export async function registerDocsRoutes(app: FastifyInstance) {
 </body>
 </html>`;
 
-  // Rota principal para a documentação web
+  // Rota principal para a documentação oficial no GitHub
   app.get("/docs", async (_request, reply) => {
-    return reply.type("text/html; charset=utf-8").send(getDocsHtml());
+    return reply.redirect(
+      "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md",
+    );
   });
 
   // Alias na v1
   app.get("/v1/docs", async (_request, reply) => {
-    return reply.redirect("/docs");
+    return reply.redirect(
+      "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md",
+    );
   });
 }

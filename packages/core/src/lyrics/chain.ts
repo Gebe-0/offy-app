@@ -12,7 +12,7 @@ import type { Lyric } from "@braccato/parsers";
 import type { LyricsCandidate, LyricsSyncLevel } from "@offy/contracts";
 
 /**
- * Mesmo pipeline que o Liner usa para letras: Better Lyrics (TTML, palavra a
+ * Pipeline de alta fidelidade para letras do OFFY: Better Lyrics (TTML, palavra a
  * palavra), Unison (casa pelo videoId), BiniLyrics, QQ Music, Kugou e LRCLIB.
  * Roda no servidor e emite um evento por provider no SSE.
  */
@@ -54,13 +54,48 @@ function getChain(): ProviderChain {
   if (chain) return chain;
   const timeout = PROVIDER_TIMEOUT_MS;
   chain = new ProviderChain();
-  chain.register({ key: "blyrics", displayName: "Better Lyrics", syncType: "word", fetch: createBLyricsProvider({ timeout }) });
-  chain.register({ key: "unison", displayName: "Unison", syncType: "word", fetch: createUnisonProvider({ timeout }) });
-  chain.register({ key: "binimum", displayName: "BiniLyrics", syncType: "word", fetch: createBinimumProvider({ timeout }) });
-  chain.register({ key: "portato", displayName: "QQ Music", syncType: "word", fetch: createPortatoProvider({ timeout }) });
-  chain.register({ key: "legato", displayName: "Kugou", syncType: "line", fetch: createLegatoProvider({ timeout }) });
-  chain.register({ key: "lrclib-synced", displayName: "LRCLIB", syncType: "line", fetch: createLRCLibSyncedProvider({ timeout }) });
-  chain.register({ key: "lrclib-plain", displayName: "LRCLIB (plain)", syncType: "unsynced", fetch: createLRCLibPlainProvider({ timeout }) });
+  chain.register({
+    key: "blyrics",
+    displayName: "Better Lyrics",
+    syncType: "word",
+    fetch: createBLyricsProvider({ timeout }),
+  });
+  chain.register({
+    key: "unison",
+    displayName: "Unison",
+    syncType: "word",
+    fetch: createUnisonProvider({ timeout }),
+  });
+  chain.register({
+    key: "binimum",
+    displayName: "BiniLyrics",
+    syncType: "word",
+    fetch: createBinimumProvider({ timeout }),
+  });
+  chain.register({
+    key: "portato",
+    displayName: "QQ Music",
+    syncType: "word",
+    fetch: createPortatoProvider({ timeout }),
+  });
+  chain.register({
+    key: "legato",
+    displayName: "Kugou",
+    syncType: "line",
+    fetch: createLegatoProvider({ timeout }),
+  });
+  chain.register({
+    key: "lrclib-synced",
+    displayName: "LRCLIB",
+    syncType: "line",
+    fetch: createLRCLibSyncedProvider({ timeout }),
+  });
+  chain.register({
+    key: "lrclib-plain",
+    displayName: "LRCLIB (plain)",
+    syncType: "unsynced",
+    fetch: createLRCLibPlainProvider({ timeout }),
+  });
   return chain;
 }
 
@@ -73,12 +108,16 @@ function stamp(ms: number): string {
 }
 
 function detectDepth(lines: Lyric[]): LyricsSyncLevel {
-  if (lines.some((line) => line.parts?.some((part) => part.durationMs > 0))) return "word_level";
+  if (lines.some((line) => line.parts?.some((part) => part.durationMs > 0)))
+    return "word_level";
   if (lines.some((line) => line.startTimeMs > 0)) return "line_level";
   return "plain";
 }
 
-function toContent(lines: Lyric[], depth: LyricsSyncLevel): { content: string; format: "lrc" | "plain" } {
+function toContent(
+  lines: Lyric[],
+  depth: LyricsSyncLevel,
+): { content: string; format: "lrc" | "plain" } {
   if (depth === "plain") {
     return {
       content: lines
@@ -107,7 +146,11 @@ function toContent(lines: Lyric[], depth: LyricsSyncLevel): { content: string; f
   return { content: body.join("\n"), format: "lrc" };
 }
 
-export function buildCandidate(provider: string, lines: Lyric[], hint: LyricsHint): LyricsCandidate | null {
+export function buildCandidate(
+  provider: string,
+  lines: Lyric[],
+  hint: LyricsHint,
+): LyricsCandidate | null {
   const depth = detectDepth(lines);
   const { content, format } = toContent(lines, depth);
   if (!content) return null;
@@ -121,7 +164,12 @@ export function buildCandidate(provider: string, lines: Lyric[], hint: LyricsHin
     provider,
     lyrics: { content, format },
     syncLevel: depth,
-    contentKind: depth === "word_level" ? "word_synced" : depth === "line_level" ? "line_synced" : "plain",
+    contentKind:
+      depth === "word_level"
+        ? "word_synced"
+        : depth === "line_level"
+          ? "line_synced"
+          : "plain",
     matchedTrack: {
       title: hint.title,
       artists: [hint.artist],
@@ -149,7 +197,10 @@ export interface ChainResult {
 
 export async function runLyricsChain(
   hint: LyricsHint,
-  options: { onFound?: (candidate: LyricsCandidate) => void; signal?: AbortSignal } = {},
+  options: {
+    onFound?: (candidate: LyricsCandidate) => void;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<ChainResult> {
   if (!hint.title.trim() || !hint.artist.trim()) {
     return { best: null, found: [], missed: [] };
@@ -210,8 +261,13 @@ export async function runLyricsChain(
     .filter((candidate): candidate is LyricsCandidate => Boolean(candidate));
 
   // O chain para no primeiro provider que acerta; os seguintes nunca rodaram.
-  const bestIndex = found[0] ? CHAIN_PRIORITY.indexOf(found[0].provider as (typeof CHAIN_PRIORITY)[number]) : -1;
-  const attempted = bestIndex >= 0 ? CHAIN_PRIORITY.slice(0, bestIndex + 1) : CHAIN_PRIORITY;
+  const bestIndex = found[0]
+    ? CHAIN_PRIORITY.indexOf(
+        found[0].provider as (typeof CHAIN_PRIORITY)[number],
+      )
+    : -1;
+  const attempted =
+    bestIndex >= 0 ? CHAIN_PRIORITY.slice(0, bestIndex + 1) : CHAIN_PRIORITY;
   const missed = attempted.filter((key) => !collected.has(key));
 
   return { best: found[0] ?? null, found, missed };

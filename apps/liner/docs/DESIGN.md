@@ -1,6 +1,6 @@
 # Design guidelines
 
-How Liner looks and moves, and why. Read this before a UI change. The code rules in
+How OFFY looks and moves, and why. Read this before a UI change. The code rules in
 [AGENTS.md](../AGENTS.md) still apply: Tailwind v4, `cn()` for conditional classes, theme
 tokens instead of raw hex, shared primitives from `@/shared/ui`.
 
