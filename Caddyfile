@@ -1,29 +1,26 @@
-# {$SITE_ADDRESS} vem do .env.
-# Sem domínio: SITE_ADDRESS=seu-ip.sslip.io  (TLS automático)
-# Ou SITE_ADDRESS=seu-dominio.com
-{$SITE_ADDRESS:http://localhost}
+http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.sslip.io, :80 {
+	encode zstd gzip
 
-encode zstd gzip
+	@health path /health
+	handle @health {
+		reverse_proxy api:8080
+	}
 
-@health path /health
-handle @health {
-	reverse_proxy api:8080
-}
-
-handle /v1/* {
-	reverse_proxy api:8080 {
-		transport http {
-			read_timeout 120s
-			write_timeout 120s
+	handle /v1/* {
+		reverse_proxy api:8080 {
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
 		}
 	}
-}
 
-handle {
-	respond "OFFY API" 200
-}
+	handle {
+		respond "OFFY API" 200
+	}
 
-log {
-	output stdout
-	format console
+	log {
+		output stdout
+		format console
+	}
 }
