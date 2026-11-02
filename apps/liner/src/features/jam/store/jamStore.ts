@@ -450,7 +450,12 @@ function startRealtimeSync(code: string, token: string) {
         userId: string;
         participants: JamParticipant[];
       };
+      const previous = useJamStore.getState().participants;
+      const leftUser = previous.find((p) => p.userId === data.userId);
       useJamStore.setState({ participants: data.participants });
+      if (leftUser?.displayName) {
+        showToast.info(`${leftUser.displayName} saiu da Jam.`);
+      }
     } catch {
       // ignore
     }
@@ -762,3 +767,55 @@ usePlayerStore.subscribe((state, prev) => {
     });
   }
 });
+
+// Re-sincroniza o estado da Jam imediatamente ao retomar o foco da janela
+if (typeof window !== "undefined") {
+  window.addEventListener("focus", () => {
+    const { code, isHost } = useJamStore.getState();
+    if (!code || isHost) return;
+
+    void fetch(`${getApiBaseUrl()}/v1/jam/${code}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: any) => {
+        if (!data?.room) return;
+        useJamStore.setState({
+          allowGuestControl: data.room.allowGuestControl ?? true,
+          queue: (data.room.queue || []).map(toClientTrack),
+          participants: data.room.participants,
+        });
+
+        if (data.room.currentTrack) {
+          const currentTrack = usePlayerStore.getState().currentTrack;
+          const currentPos = usePlayerStore.getState().positionMs;
+          const status = usePlayerStore.getState().status;
+
+          const clientTrack = toClientTrack(data.room.currentTrack);
+          const elapsed =
+            data.room.status === "playing"
+              ? Math.max(0, Date.now() - data.room.updatedAt)
+              : 0;
+          const expectedPos = data.room.positionMs + elapsed;
+
+          if (currentTrack?.id !== clientTrack.id) {
+            syncRemoteTrack(
+              clientTrack,
+              data.room.status,
+              data.room.positionMs,
+              data.room.updatedAt,
+            );
+          } else if (
+            Math.abs(currentPos - expectedPos) > 2500 &&
+            status === "playing"
+          ) {
+            setRemoteSyncingState(true, 1500);
+            playerRuntime?.seek(expectedPos);
+          } else if (status !== data.room.status) {
+            setRemoteSyncingState(true, 1500);
+            if (data.room.status === "playing") playerRuntime?.resume();
+            else if (data.room.status === "paused") playerRuntime?.pause();
+          }
+        }
+      })
+      .catch(() => {});
+  });
+}

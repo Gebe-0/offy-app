@@ -41,6 +41,8 @@ export const TimelineSlider = memo(function TimelineSlider({
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [scrubPosition, setScrubPosition] = useState<number | null>(null);
+  const [hoverPosition, setHoverPosition] = useState<number | null>(null);
+  const [hoverClientX, setHoverClientX] = useState<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
   const duration = Math.max(0, durationMs);
@@ -154,7 +156,19 @@ export const TimelineSlider = memo(function TimelineSlider({
     <div
       className={`group relative flex ${containerHeights} items-center select-none prevent-seek ${className}`}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setHoverPosition(null);
+        setHoverClientX(null);
+      }}
+      onPointerMove={(e) => {
+        const rect = trackRef.current?.getBoundingClientRect();
+        if (!rect || rect.width === 0 || duration <= 0) return;
+        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        const ratio = x / rect.width;
+        setHoverClientX(x);
+        setHoverPosition(ratio * duration);
+      }}
     >
       {showTime && (
         <span className="text-[11px] tabular-nums text-text-tertiary w-[36px] text-right shrink-0 pr-[8px]">
@@ -173,6 +187,17 @@ export const TimelineSlider = memo(function TimelineSlider({
         onPointerDown={handlePointerDown}
         className="relative flex h-full flex-1 items-center cursor-pointer outline-none"
       >
+        {isHovered &&
+          hoverPosition !== null &&
+          hoverClientX !== null &&
+          duration > 0 && (
+            <div
+              className="pointer-events-none absolute -top-[25px] -translate-x-1/2 z-40 px-[6px] py-[2px] rounded-[5px] bg-[#18181b] border border-white/[0.12] text-[10.5px] font-mono font-bold text-white shadow-md select-none transition-opacity duration-100"
+              style={{ left: `${hoverClientX}px` }}
+            >
+              {formatPlaybackTime(hoverPosition)}
+            </div>
+          )}
         <motion.div
           ref={trackRef}
           initial={false}

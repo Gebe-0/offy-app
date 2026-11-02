@@ -43,8 +43,8 @@ function QueueAction({
         className={cn(
           "inline-flex h-[32px] w-[36px] items-center justify-center rounded-[7px] border-0 cursor-pointer transition-[background-color,color,transform] duration-150 active:scale-[0.94] disabled:cursor-default disabled:opacity-35 disabled:active:scale-100",
           active
-            ? "bg-white/[0.16] text-text-primary"
-            : "bg-transparent text-text-secondary hover:bg-white/[0.08] hover:text-text-primary disabled:hover:bg-transparent",
+            ? "bg-fill-strong text-text-primary"
+            : "bg-transparent text-text-secondary hover:bg-fill-hover hover:text-text-primary disabled:hover:bg-transparent",
         )}
       >
         {children}
@@ -74,7 +74,7 @@ export function RightDrawerHeader({
           onClick={onClose}
           aria-label={t("common.back") || "Back"}
           data-no-tooltip="true"
-          className="group inline-flex h-[40px] w-[44px] shrink-0 items-center justify-center rounded-[10px] border-0 bg-white/[0.1] text-text-primary cursor-pointer transition-[background-color,transform] duration-150 hover:bg-white/[0.15] active:scale-[0.94]"
+          className="group inline-flex h-[40px] w-[44px] shrink-0 items-center justify-center rounded-[10px] border-0 bg-fill text-text-primary cursor-pointer transition-[background-color,transform] duration-150 hover:bg-fill-hover active:scale-[0.94]"
         >
           <LeftLine
             size={20}
@@ -92,7 +92,7 @@ export function RightDrawerHeader({
         </span>
       </div>
 
-      <div className="flex h-[40px] shrink-0 items-center gap-[2px] rounded-[10px] bg-white/[0.1] p-[4px]">
+      <div className="flex h-[40px] shrink-0 items-center gap-[2px] rounded-[10px] bg-fill p-[4px]">
         <QueueAction
           label={shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
           active={shuffle}

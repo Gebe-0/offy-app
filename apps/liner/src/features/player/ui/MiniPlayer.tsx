@@ -854,7 +854,15 @@ function MiniPlayer({
                 onClick={handleLikeToggle}
                 style={{ cursor: "pointer" }}
               >
-                {isLiked ? <HeartFill size={20} /> : <HeartLine size={20} />}
+                <motion.span
+                  key={isLiked ? "liked" : "unliked"}
+                  initial={{ scale: 0.75 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                  className="flex items-center justify-center"
+                >
+                  {isLiked ? <HeartFill size={20} /> : <HeartLine size={20} />}
+                </motion.span>
               </button>
             )}
           </div>
