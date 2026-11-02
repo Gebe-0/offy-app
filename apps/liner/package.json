@@ -5,7 +5,7 @@
   "private": true,
   "description": "OFFY Music Player",
   "author": {
-    "name": "hkamori",
+    "name": "GEBE - OFFY",
     "email": "contact@offy.app"
   },
   "desktopName": "offy",
@@ -32,6 +32,7 @@
   "build": {
     "appId": "fun.offy.client",
     "productName": "OFFY",
+    "copyright": "Copyright © 2026 GEBE - OFFY",
     "executableName": "offy",
     "artifactName": "OFFY-${version}-${arch}.${ext}",
     "publish": [],
@@ -53,7 +54,7 @@
     "linux": {
       "executableName": "offy",
       "syncDesktopName": true,
-      "maintainer": "hkamori <contact@offy.app>",
+      "maintainer": "GEBE - OFFY <contact@offy.app>",
       "icon": "build/icons",
       "target": [
         "AppImage",
@@ -70,6 +71,7 @@
     },
     "win": {
       "executableName": "offy",
+      "publisherName": "GEBE - OFFY",
       "icon": "build/icon.ico",
       "target": [
         "nsis"
