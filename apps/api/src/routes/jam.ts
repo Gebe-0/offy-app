@@ -117,7 +117,12 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         code = generateCode();
       }
 
-      const body = (request.body ?? {}) as { allowGuestControl?: boolean; currentTrack?: unknown };
+      const body = (request.body ?? {}) as {
+        allowGuestControl?: boolean;
+        currentTrack?: unknown;
+        positionMs?: number;
+        status?: "playing" | "paused" | "idle";
+      };
 
       const room: JamRoom = {
         code,
@@ -125,8 +130,8 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         hostName: user.displayName,
         createdAt: Date.now(),
         currentTrack: body.currentTrack ?? null,
-        status: body.currentTrack ? "playing" : "idle",
-        positionMs: 0,
+        status: body.status ?? (body.currentTrack ? "playing" : "idle"),
+        positionMs: Math.max(0, Number(body.positionMs ?? 0)),
         updatedAt: Date.now(),
         allowGuestControl: body.allowGuestControl ?? true,
         queue: [],
@@ -380,7 +385,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Stream Server-Sent Events (SSE) com flush e ping contínuo
+  // Stream Server-Sent Events (SSE) nativo e resiliente com hijack
   app.get("/v1/jam/:code/events", async (request, reply) => {
     try {
       const userId = getUserIdFromRequest(request);
@@ -392,16 +397,27 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ code: "JAM_NOT_FOUND", message: "Jam not found" });
       }
 
-      reply.raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-      reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
-      reply.raw.setHeader("Connection", "keep-alive");
-      reply.raw.setHeader("X-Accel-Buffering", "no");
-      reply.raw.flushHeaders?.();
+      // Desacopla do Fastify lifecycle para manter conexão viva sem timeout
+      reply.hijack();
+
+      const res = reply.raw;
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.flushHeaders?.();
 
       const subscriber: JamSubscriber = {
         userId,
         send: (event: string, data: unknown) => {
-          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          try {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          } catch {
+            // dead socket
+          }
         },
       };
 
@@ -412,19 +428,16 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const pingInterval = setInterval(() => {
         try {
-          reply.raw.write(": ping\n\n");
+          res.write(": ping\n\n");
         } catch {
           clearInterval(pingInterval);
+          room.subscribers.delete(subscriber);
         }
       }, 10000);
 
       request.raw.on("close", () => {
         clearInterval(pingInterval);
         room.subscribers.delete(subscriber);
-      });
-
-      await new Promise<void>((resolve) => {
-        request.raw.on("close", resolve);
       });
     } catch (error) {
       return sendError(reply, error);

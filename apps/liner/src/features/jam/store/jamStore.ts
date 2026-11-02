@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { getApiBaseUrl } from "@/shared/api/baseUrl";
-import { getValidAccessToken } from "@/shared/api/auth-session";
+import { getValidAccessToken, getAuthSession } from "@/shared/api/auth-session";
 import { toClientTrack } from "@/shared/api/track";
 import { showToast } from "@/shared/ui";
 import { usePlayerStore, playerEngine, playerRuntime } from "@/features/player";
@@ -69,6 +69,8 @@ export const useJamStore = create<JamState>((set, get) => ({
         },
         body: JSON.stringify({
           currentTrack,
+          positionMs: currentPlayerState.positionMs,
+          status: currentPlayerState.status,
           allowGuestControl: get().allowGuestControl,
         }),
       });
@@ -84,6 +86,21 @@ export const useJamStore = create<JamState>((set, get) => ({
         jamUrl: string;
         shareUrl: string;
       };
+
+      playerEngine.setJamBridge({
+        getNextTrack: () => {
+          const q = get().queue;
+          return q.length > 0 ? q[0] : null;
+        },
+        onTrackConsumed: (trackId) => {
+          void get().removeFromQueue(trackId);
+        },
+        canControlPlayback: () => {
+          const { isHost, allowGuestControl } = get();
+          return isHost || allowGuestControl;
+        },
+        isHost: () => get().isHost,
+      });
 
       set({
         code: data.room.code,
@@ -145,7 +162,23 @@ export const useJamStore = create<JamState>((set, get) => ({
         shareUrl: string;
       };
 
-      const isHost = data.room.hostId === data.room.participants.find((p) => p.isHost)?.userId;
+      const currentUserId = getAuthSession()?.user.id;
+      const isHost = Boolean(currentUserId && data.room.hostId === currentUserId);
+
+      playerEngine.setJamBridge({
+        getNextTrack: () => {
+          const q = get().queue;
+          return q.length > 0 ? q[0] : null;
+        },
+        onTrackConsumed: (trackId) => {
+          void get().removeFromQueue(trackId);
+        },
+        canControlPlayback: () => {
+          const { isHost, allowGuestControl } = get();
+          return isHost || allowGuestControl;
+        },
+        isHost: () => get().isHost,
+      });
 
       set({
         code: data.room.code,
@@ -265,6 +298,7 @@ export const useJamStore = create<JamState>((set, get) => ({
 
   leaveJam: async () => {
     const currentCode = get().code;
+    playerEngine.setJamBridge(null);
     stopRealtimeSync();
 
     if (currentCode) {
@@ -320,13 +354,16 @@ function startRealtimeSync(code: string, token: string) {
   es.addEventListener("init", (e) => {
     try {
       const room = JSON.parse(e.data) as JamRoomState;
+      const currentUserId = getAuthSession()?.user.id;
+      const isHost = Boolean(currentUserId && room.hostId === currentUserId);
+
       useJamStore.setState({
+        isHost,
         allowGuestControl: room.allowGuestControl ?? true,
         queue: (room.queue || []).map(toClientTrack),
         participants: room.participants,
       });
 
-      const { isHost } = useJamStore.getState();
       if (room.currentTrack && !isHost) {
         syncRemoteTrack(
           toClientTrack(room.currentTrack),
@@ -391,6 +428,7 @@ function startRealtimeSync(code: string, token: string) {
   });
 
   es.addEventListener("jam_closed", () => {
+    playerEngine.setJamBridge(null);
     useJamStore.setState({
       code: null,
       isHost: false,
@@ -443,7 +481,15 @@ function startRealtimeSync(code: string, token: string) {
             if (currentTrack?.id !== clientTrack.id) {
               syncRemoteTrack(clientTrack, data.room.status, data.room.positionMs, data.room.updatedAt);
             } else if (Math.abs(currentPos - expectedPos) > 4500 && status === "playing") {
+              setRemoteSyncingState(true, 1500);
               playerRuntime?.seek(expectedPos);
+            } else if (status !== data.room.status) {
+              setRemoteSyncingState(true, 1500);
+              if (data.room.status === "playing") {
+                playerRuntime?.resume();
+              } else if (data.room.status === "paused") {
+                playerRuntime?.pause();
+              }
             }
           }
         }
@@ -477,36 +523,87 @@ async function sendJamSync(
   }
 }
 
+let syncCooldownTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSyncTrackId: string | null = null;
+let lastSyncTrackTime = 0;
+
+function setRemoteSyncingState(active: boolean, cooldownMs: number = 1800) {
+  isRemoteSyncing = active;
+  if (syncCooldownTimer) {
+    clearTimeout(syncCooldownTimer);
+    syncCooldownTimer = null;
+  }
+  if (active) {
+    syncCooldownTimer = setTimeout(() => {
+      isRemoteSyncing = false;
+    }, cooldownMs);
+  }
+}
+
 function syncRemoteTrack(
   track: Track,
   status: "playing" | "paused" | "idle",
   positionMs: number,
   updatedAt: number,
 ) {
-  isRemoteSyncing = true;
-  lastKnownHostTrackId = track.id;
+  setRemoteSyncingState(true, 2500);
 
-  const elapsed = status === "playing" ? Math.max(0, Date.now() - updatedAt) : 0;
+  const now = Date.now();
+  const elapsed = status === "playing" ? Math.max(0, now - updatedAt) : 0;
   const targetPos = Math.max(0, positionMs + elapsed);
 
-  void playerEngine.playTrack(track, [track], track.artists, track.coverUrl).then(() => {
-    if (targetPos > 600) {
+  const currentTrack = usePlayerStore.getState().currentTrack;
+  const currentStatus = usePlayerStore.getState().status;
+  const currentPos = usePlayerStore.getState().positionMs;
+
+  // Se já estamos com essa faixa carregada ou iniciamos o carregamento dela há menos de 3.5s
+  if (
+    currentTrack?.id === track.id ||
+    (lastSyncTrackId === track.id && now - lastSyncTrackTime < 3500)
+  ) {
+    if (Math.abs(currentPos - targetPos) > 2500) {
       playerRuntime?.seek(targetPos);
     }
+    if (status === "playing" && currentStatus !== "playing" && currentStatus !== "loading") {
+      playerRuntime?.resume();
+    } else if (status === "paused" && currentStatus === "playing") {
+      playerRuntime?.pause();
+    }
+    return;
+  }
+
+  lastSyncTrackId = track.id;
+  lastSyncTrackTime = now;
+  lastKnownHostTrackId = track.id;
+
+  const clientTrack = toClientTrack(track);
+
+  void playerEngine.playTrack(
+    clientTrack,
+    [clientTrack],
+    "jam",
+    null,
+    undefined,
+    undefined,
+    targetPos,
+  ).then(() => {
     if (status === "paused") {
       playerRuntime?.pause();
     }
-    setTimeout(() => {
-      isRemoteSyncing = false;
-    }, 800);
   });
 }
 
 function handleRemoteSync(event: JamSyncEvent) {
-  isRemoteSyncing = true;
+  const myUserId = getAuthSession()?.user.id;
+  if (event.senderId && myUserId && event.senderId === myUserId) {
+    return;
+  }
+
+  setRemoteSyncingState(true, 1800);
   lastSyncTimestamp = Date.now();
 
   const currentTrack = usePlayerStore.getState().currentTrack;
+  const currentPos = usePlayerStore.getState().positionMs;
 
   if (event.action === "TRACK_CHANGE" && event.track) {
     syncRemoteTrack(toClientTrack(event.track), event.status, event.positionMs, event.updatedAt);
@@ -522,7 +619,9 @@ function handleRemoteSync(event: JamSyncEvent) {
   const targetPos = Math.max(0, event.positionMs + elapsed);
 
   if (event.action === "PLAY") {
-    playerRuntime?.seek(targetPos);
+    if (Math.abs(currentPos - targetPos) > 2500) {
+      playerRuntime?.seek(targetPos);
+    }
     playerRuntime?.resume();
   } else if (event.action === "PAUSE") {
     playerRuntime?.pause();
@@ -532,10 +631,6 @@ function handleRemoteSync(event: JamSyncEvent) {
   } else if (event.action === "SEEK") {
     playerRuntime?.seek(event.positionMs);
   }
-
-  setTimeout(() => {
-    isRemoteSyncing = false;
-  }, 600);
 }
 
 // Observador do player local: se este usuário puder sincronizar com a Jam, propaga as alterações
@@ -576,8 +671,8 @@ usePlayerStore.subscribe((state, prev) => {
     return;
   }
 
-  // Seek disparado (diferença maior que 3.5 segundos sem transição de status)
-  if (Math.abs(state.positionMs - prev.positionMs) > 3500 && Math.abs(Date.now() - lastSyncTimestamp) > 1000) {
+  // Seek disparado (diferença maior que 1.8 segundos sem transição de status)
+  if (Math.abs(state.positionMs - prev.positionMs) > 1800 && Math.abs(Date.now() - lastSyncTimestamp) > 800) {
     lastSyncTimestamp = Date.now();
     void getValidAccessToken().then((token) => {
       if (token) {

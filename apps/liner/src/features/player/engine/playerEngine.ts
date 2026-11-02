@@ -49,6 +49,13 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export { usePlayerStore, type PlayerStatus, type RepeatMode, type PlayerState };
 
+export interface JamPlaybackBridge {
+  getNextTrack: () => Track | null | undefined;
+  onTrackConsumed: (trackId: string) => void;
+  canControlPlayback: () => boolean;
+  isHost: () => boolean;
+}
+
 function shuffleArray<T>(array: T[]): T[] {
   const result = [...array];
   for (let i = result.length - 1; i > 0; i--) {
@@ -318,6 +325,7 @@ class PlaybackTelemetryTracker {
 }
 
 class PlayerEngine {
+  private jamBridge: JamPlaybackBridge | null = null;
   private sessionId = 0;
   private lyricsLoadToken = 0;
   private lyricsAbort: AbortController | null = null;
@@ -471,6 +479,10 @@ class PlayerEngine {
     }
   }
 
+  public setJamBridge(bridge: JamPlaybackBridge | null): void {
+    this.jamBridge = bridge;
+  }
+
   public async playTrack(
     track: Track,
     queue?: Track[],
@@ -478,6 +490,7 @@ class PlayerEngine {
     contextCover?: string | null,
     queueIndex?: number,
     preserveQueue?: boolean,
+    startPositionMs: number = 0,
   ): Promise<void> {
     const store = usePlayerStore.getState();
     const nextQueue = this.normalizeQueue(queue ?? [track], track);
@@ -531,12 +544,12 @@ class PlayerEngine {
 
     const selectedTrack = finalQueue[finalIndex] ?? track;
     store.setCurrentTrack(selectedTrack, finalIndex);
-    store.setPosition(0);
+    store.setPosition(startPositionMs);
     store.setDuration(selectedTrack.durationMs ?? 0);
     store.setStatus("loading", null);
 
     if (playerRuntime) {
-      void playerRuntime.loadAndPlay(selectedTrack);
+      void playerRuntime.loadAndPlay(selectedTrack, startPositionMs);
     }
 
     this.maybeExtendQueue(
@@ -657,6 +670,10 @@ class PlayerEngine {
   }
 
   public pause(): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const wasLoading = store.status === "loading";
     if (wasLoading) {
@@ -675,6 +692,10 @@ class PlayerEngine {
   }
 
   public resume(): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     if (playerRuntime) {
       if (
@@ -690,6 +711,10 @@ class PlayerEngine {
   }
 
   public togglePlayPause(): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     if (store.status === "playing" || store.status === "loading") {
       this.pause();
@@ -699,6 +724,22 @@ class PlayerEngine {
   }
 
   public async skipNext(isAutoEnd: boolean = false): Promise<void> {
+    if (this.jamBridge) {
+      if (!isAutoEnd && !this.jamBridge.canControlPlayback()) {
+        showToast.info("Apenas o Host pode avançar de faixa na Jam.");
+        return;
+      }
+      if (isAutoEnd && !this.jamBridge.isHost()) {
+        return;
+      }
+      const nextJamTrack = this.jamBridge.getNextTrack();
+      if (nextJamTrack) {
+        this.jamBridge.onTrackConsumed(nextJamTrack.id);
+        void this.playTrack(nextJamTrack, [nextJamTrack], "jam");
+        return;
+      }
+    }
+
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
 
@@ -756,6 +797,10 @@ class PlayerEngine {
   }
 
   public async skipPrevious(): Promise<void> {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     if (store.queue.length === 0) return;
 
@@ -924,6 +969,10 @@ class PlayerEngine {
   }
 
   public seek(positionMs: number, autoPlay: boolean = false): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const currentMs = store.positionMs;
     const durationMs = store.durationMs || store.currentTrack?.durationMs || 0;

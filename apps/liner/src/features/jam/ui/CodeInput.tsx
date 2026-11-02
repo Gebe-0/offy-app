@@ -63,9 +63,29 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
     }
   };
 
-  const handlePastedText = (text: string) => {
-    // Limpa a URL caso cole o link inteiro ou código
-    const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const handlePastedText = (rawText: string) => {
+    let text = rawText.trim();
+    // Se colou o link completo (web ou offy://), extrai o parâmetro ou pathname final
+    try {
+      if (text.includes("://") || text.startsWith("offy:") || text.startsWith("http")) {
+        const url = new URL(text);
+        const idParam = url.searchParams.get("id");
+        if (idParam) {
+          text = idParam;
+        } else {
+          const parts = url.pathname.split("/").filter(Boolean);
+          if (parts.length > 0) {
+            text = parts[parts.length - 1]!;
+          }
+        }
+      }
+    } catch {
+      // Ignora erro de parsing de URL
+    }
+
+    const match = text.match(/([A-HJ-NP-Z2-9]{6})/i) || text.match(/([A-Z0-9]{6})/i);
+    const clean = (match ? match[1]! : text.replace(/[^A-Z0-9]/gi, "")).toUpperCase().slice(0, 6);
+
     if (clean) {
       onChange(clean);
       const focusIndex = Math.min(clean.length, 5);

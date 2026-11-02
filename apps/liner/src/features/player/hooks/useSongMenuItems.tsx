@@ -7,10 +7,12 @@ import {
   LuPlus,
   LuTrash2,
   LuFolderPlus,
+  LuUsers,
 } from "react-icons/lu";
 import { ShareForwardLine } from "@mingcute/react";
 import type { DropdownMenuItem } from "@/shared/ui/DropdownMenu";
 import { playerEngine } from "../engine/playerEngine";
+import { useJamStore } from "@/features/jam";
 import {
   usePlaylistsList,
   useLikeTrack,
@@ -68,6 +70,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
   } = ctx;
 
   const { data: playlistsData } = usePlaylistsList();
+  const jamCode = useJamStore((s) => s.code);
 
   const likeMutation = useLikeTrack();
   const unlikeMutation = useUnlikeTrack();
@@ -152,6 +155,26 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
               });
             },
           },
+          ...(jamCode
+            ? [
+                {
+                  id: "add-to-jam-queue",
+                  label: "Adicionar à fila da Jam",
+                  icon: <LuUsers size={15} />,
+                  onClick: () => {
+                    if (!id) return;
+                    void useJamStore.getState().addToQueue({
+                      id,
+                      title,
+                      artists,
+                      coverUrl,
+                      durationMs: durationMs ?? 0,
+                      playCount: 0,
+                    });
+                  },
+                },
+              ]
+            : []),
           {
             id: liked ? "unlike-track" : "like-track",
             label: liked ? t("common.unlike") : t("common.like"),
@@ -244,6 +267,26 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
             });
           },
         },
+        ...(jamCode
+          ? [
+              {
+                id: "add-to-jam-queue",
+                label: "Adicionar à fila da Jam",
+                icon: <LuUsers size={15} />,
+                onClick: () => {
+                  if (!id) return;
+                  void useJamStore.getState().addToQueue({
+                    id,
+                    title,
+                    artists,
+                    coverUrl,
+                    durationMs: durationMs ?? 0,
+                    playCount: 0,
+                  });
+                },
+              },
+            ]
+          : []),
         {
           id: liked ? "unlike-track" : "like-track",
           label: liked ? t("common.unlike") : t("common.like"),
@@ -334,6 +377,7 @@ export function useSongMenuItems(ctx: SongMenuContext): DropdownMenuItem[] {
     handleLike,
     handleShare,
     playlistsData,
+    jamCode,
     t,
   ]);
 
