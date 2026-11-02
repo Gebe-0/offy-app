@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.turbo/
+*.log
+.pnpm-store/
+.env*
+!apps/liner/.env.example
+!apps/api/.env.example
+*.exe

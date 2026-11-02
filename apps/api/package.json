@@ -1,0 +1,30 @@
+{
+  "name": "@offy/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "smoke": "tsx src/smoke.ts",
+    "e2e": "tsx src/e2e.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@braccato/parsers": "0.4.0",
+    "@braccato/provider-blyrics": "0.2.3",
+    "@fastify/cors": "^10.0.1",
+    "@offy/contracts": "workspace:*",
+    "@offy/core": "workspace:*",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
