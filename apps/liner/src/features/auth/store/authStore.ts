@@ -102,6 +102,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   login: async (email, password) => {
+    queryCache.clear();
+    clearScreenCache();
     const result = await api.login(email, password);
     set({ status: "authenticated", user: result.user });
     if (typeof window !== "undefined") {
@@ -109,6 +111,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   register: async (email, password, username, displayName) => {
+    queryCache.clear();
+    clearScreenCache();
     const result = await api.register(email, password, username, displayName);
     set({ status: "authenticated", user: result.user });
     if (typeof window !== "undefined") {

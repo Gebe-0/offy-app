@@ -10,7 +10,6 @@ import type { JamParticipant, JamRoomState, JamSyncEvent } from "../types";
 let activeEventSource: EventSource | null = null;
 let pollIntervalTimer: ReturnType<typeof setInterval> | null = null;
 let isRemoteSyncing = false;
-let lastKnownHostTrackId: string | null = null;
 let lastSyncTimestamp = 0;
 
 export interface JamState {
@@ -125,7 +124,10 @@ export const useJamStore = create<JamState>((set, get) => ({
   },
 
   joinJam: async (rawCode: string) => {
-    const cleanCode = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const cleanCode = rawCode
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
     if (cleanCode.length !== 6) {
       set({ error: "O código da Jam deve ter exatamente 6 dígitos." });
       return false;
@@ -163,7 +165,9 @@ export const useJamStore = create<JamState>((set, get) => ({
       };
 
       const currentUserId = getAuthSession()?.user.id;
-      const isHost = Boolean(currentUserId && data.room.hostId === currentUserId);
+      const isHost = Boolean(
+        currentUserId && data.room.hostId === currentUserId,
+      );
 
       playerEngine.setJamBridge({
         getNextTrack: () => {
@@ -283,14 +287,17 @@ export const useJamStore = create<JamState>((set, get) => ({
       const token = await getValidAccessToken();
       if (!token) return;
 
-      await fetch(`${getApiBaseUrl()}/v1/jam/${code}/queue/${encodeURIComponent(trackId)}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      await fetch(
+        `${getApiBaseUrl()}/v1/jam/${code}/queue/${encodeURIComponent(trackId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      });
+      );
     } catch {
       // ignore
     }
@@ -442,7 +449,6 @@ function startRealtimeSync(code: string, token: string) {
   });
 
   es.addEventListener("sync", (e) => {
-    const { isHost, allowGuestControl } = useJamStore.getState();
     try {
       const event = JSON.parse(e.data) as JamSyncEvent;
       // Se quem enviou foi este próprio cliente, ignora
@@ -474,13 +480,24 @@ function startRealtimeSync(code: string, token: string) {
             const status = usePlayerStore.getState().status;
 
             const clientTrack = toClientTrack(data.room.currentTrack);
-            const elapsed = data.room.status === "playing" ? Math.max(0, Date.now() - data.room.updatedAt) : 0;
+            const elapsed =
+              data.room.status === "playing"
+                ? Math.max(0, Date.now() - data.room.updatedAt)
+                : 0;
             const expectedPos = data.room.positionMs + elapsed;
 
             // Se a música for diferente ou houver drift maior que 4.5 segundos
             if (currentTrack?.id !== clientTrack.id) {
-              syncRemoteTrack(clientTrack, data.room.status, data.room.positionMs, data.room.updatedAt);
-            } else if (Math.abs(currentPos - expectedPos) > 4500 && status === "playing") {
+              syncRemoteTrack(
+                clientTrack,
+                data.room.status,
+                data.room.positionMs,
+                data.room.updatedAt,
+              );
+            } else if (
+              Math.abs(currentPos - expectedPos) > 4500 &&
+              status === "playing"
+            ) {
               setRemoteSyncingState(true, 1500);
               playerRuntime?.seek(expectedPos);
             } else if (status !== data.room.status) {
@@ -564,7 +581,11 @@ function syncRemoteTrack(
     if (Math.abs(currentPos - targetPos) > 2500) {
       playerRuntime?.seek(targetPos);
     }
-    if (status === "playing" && currentStatus !== "playing" && currentStatus !== "loading") {
+    if (
+      status === "playing" &&
+      currentStatus !== "playing" &&
+      currentStatus !== "loading"
+    ) {
       playerRuntime?.resume();
     } else if (status === "paused" && currentStatus === "playing") {
       playerRuntime?.pause();
@@ -578,19 +599,21 @@ function syncRemoteTrack(
 
   const clientTrack = toClientTrack(track);
 
-  void playerEngine.playTrack(
-    clientTrack,
-    [clientTrack],
-    "jam",
-    null,
-    undefined,
-    undefined,
-    targetPos,
-  ).then(() => {
-    if (status === "paused") {
-      playerRuntime?.pause();
-    }
-  });
+  void playerEngine
+    .playTrack(
+      clientTrack,
+      [clientTrack],
+      "jam",
+      null,
+      undefined,
+      undefined,
+      targetPos,
+    )
+    .then(() => {
+      if (status === "paused") {
+        playerRuntime?.pause();
+      }
+    });
 }
 
 function handleRemoteSync(event: JamSyncEvent) {
@@ -606,16 +629,27 @@ function handleRemoteSync(event: JamSyncEvent) {
   const currentPos = usePlayerStore.getState().positionMs;
 
   if (event.action === "TRACK_CHANGE" && event.track) {
-    syncRemoteTrack(toClientTrack(event.track), event.status, event.positionMs, event.updatedAt);
+    syncRemoteTrack(
+      toClientTrack(event.track),
+      event.status,
+      event.positionMs,
+      event.updatedAt,
+    );
     return;
   }
 
   if (event.track && (!currentTrack || currentTrack.id !== event.track.id)) {
-    syncRemoteTrack(toClientTrack(event.track), event.status, event.positionMs, event.updatedAt);
+    syncRemoteTrack(
+      toClientTrack(event.track),
+      event.status,
+      event.positionMs,
+      event.updatedAt,
+    );
     return;
   }
 
-  const elapsed = event.status === "playing" ? Math.max(0, Date.now() - event.updatedAt) : 0;
+  const elapsed =
+    event.status === "playing" ? Math.max(0, Date.now() - event.updatedAt) : 0;
   const targetPos = Math.max(0, event.positionMs + elapsed);
 
   if (event.action === "PLAY") {
@@ -643,7 +677,6 @@ usePlayerStore.subscribe((state, prev) => {
 
   // Faixa mudou
   if (state.currentTrack && state.currentTrack.id !== prev.currentTrack?.id) {
-    lastKnownHostTrackId = state.currentTrack.id;
     void getValidAccessToken().then((token) => {
       if (token) {
         void sendJamSync(code, token, {
@@ -657,7 +690,10 @@ usePlayerStore.subscribe((state, prev) => {
   }
 
   // Play / Pause mudou
-  if (state.status !== prev.status && (state.status === "playing" || state.status === "paused")) {
+  if (
+    state.status !== prev.status &&
+    (state.status === "playing" || state.status === "paused")
+  ) {
     const action = state.status === "playing" ? "PLAY" : "PAUSE";
     void getValidAccessToken().then((token) => {
       if (token) {
@@ -672,7 +708,10 @@ usePlayerStore.subscribe((state, prev) => {
   }
 
   // Seek disparado (diferença maior que 1.8 segundos sem transição de status)
-  if (Math.abs(state.positionMs - prev.positionMs) > 1800 && Math.abs(Date.now() - lastSyncTimestamp) > 800) {
+  if (
+    Math.abs(state.positionMs - prev.positionMs) > 1800 &&
+    Math.abs(Date.now() - lastSyncTimestamp) > 800
+  ) {
     lastSyncTimestamp = Date.now();
     void getValidAccessToken().then((token) => {
       if (token) {

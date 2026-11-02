@@ -74,9 +74,9 @@ describe("simulatedFailureFor", () => {
   });
 
   it("fails liner hosts and the configured dev api, but not the dev server", () => {
-    expect(
-      simulatedFailureFor("https://api.offy.app/v1/me", linerDown),
-    ).toBe("blocked");
+    expect(simulatedFailureFor("https://api.offy.app/v1/me", linerDown)).toBe(
+      "blocked",
+    );
     expect(
       simulatedFailureFor("https://covers.offy.app/x.jpg", linerDown),
     ).toBe("blocked");

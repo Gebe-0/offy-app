@@ -37,7 +37,7 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
   const type = url.hostname.toLowerCase();
   const pattern = DEEP_LINK_IDS[type];
   if (!pattern) return null;
-  
+
   let id = "";
   const ids = url.searchParams.getAll("id");
   if (ids.length === 1 && ids[0]) {
@@ -47,9 +47,14 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
   }
 
   if (!id || !pattern.test(id)) return null;
-  return { type: type as DeeplinkTarget["type"], id: type === "jam" ? id.toUpperCase() : id };
+  return {
+    type: type as DeeplinkTarget["type"],
+    id: type === "jam" ? id.toUpperCase() : id,
+  };
 }
 
 export function findDeeplinkArg(argv: string[]): string | undefined {
-  return argv.find((arg) => arg.startsWith("offy://") || arg.startsWith("liner://"));
+  return argv.find(
+    (arg) => arg.startsWith("offy://") || arg.startsWith("liner://"),
+  );
 }

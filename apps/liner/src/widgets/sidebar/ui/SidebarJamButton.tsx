@@ -22,7 +22,9 @@ export function SidebarJamButton() {
             size={24}
             className={cn(
               "relative z-10 transition-opacity duration-150 ease-out",
-              jamCode ? "text-emerald-400 opacity-100" : "text-text-primary opacity-55 group-hover:opacity-90",
+              jamCode
+                ? "text-emerald-400 opacity-100"
+                : "text-text-primary opacity-55 group-hover:opacity-90",
             )}
           />
           {jamCode && (

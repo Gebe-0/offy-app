@@ -601,7 +601,8 @@ export default function LoginPage() {
           <p className="m-0 shrink-0 text-center text-[11px] leading-[1.5] text-text-tertiary">
             {t("login.legal")}{" "}
             <a
-              href="#" onClick={(e) => e.preventDefault()}
+              href="#"
+              onClick={(e) => e.preventDefault()}
               target="_blank"
               rel="noreferrer"
               className="text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"
@@ -610,7 +611,8 @@ export default function LoginPage() {
             </a>{" "}
             {t("login.legal_and")}{" "}
             <a
-              href="#" onClick={(e) => e.preventDefault()}
+              href="#"
+              onClick={(e) => e.preventDefault()}
               target="_blank"
               rel="noreferrer"
               className="text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"

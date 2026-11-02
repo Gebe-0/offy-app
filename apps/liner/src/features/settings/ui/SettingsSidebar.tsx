@@ -36,8 +36,6 @@ export function SettingsSidebar<T extends string>({
 }: SettingsSidebarProps<T>) {
   const { t } = useTranslation();
   const { attach, onScroll, style } = useScrollFade<HTMLElement>();
-  const openExternal = (url: string) =>
-    window.open(url, "_blank", "noopener,noreferrer");
 
   return (
     <aside className="flex min-h-0 w-[240px] shrink-0 flex-col font-sans">
@@ -96,11 +94,7 @@ export function SettingsSidebar<T extends string>({
 
         <div className="flex flex-col gap-[1px]">
           <GroupLabel>{t("settings.groups.help")}</GroupLabel>
-          <NavItem
-            icon={Book2}
-            label={t("settings.docs")}
-            onClick={() => {}}
-          />
+          <NavItem icon={Book2} label={t("settings.docs")} onClick={() => {}} />
           <NavItem
             icon={QuestionCircle}
             label={t("settings.support")}

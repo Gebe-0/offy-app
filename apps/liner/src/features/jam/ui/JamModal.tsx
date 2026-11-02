@@ -1,6 +1,11 @@
 import { useState } from "react";
 import Dialog from "@/shared/ui/Dialog";
-import { DialogActions, DialogButton, DialogHeader, ToggleSwitch } from "@/shared/ui";
+import {
+  DialogActions,
+  DialogButton,
+  DialogHeader,
+  ToggleSwitch,
+} from "@/shared/ui";
 import { showToast } from "@/shared/ui";
 import { usePlayerStore } from "@/features/player";
 import { useJamStore } from "../store/jamStore";
@@ -29,7 +34,9 @@ export default function JamModal() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
 
   const [tab, setTab] = useState<"create" | "join">("create");
-  const [activeTab, setActiveTab] = useState<"participants" | "queue">("participants");
+  const [activeTab, setActiveTab] = useState<"participants" | "queue">(
+    "participants",
+  );
   const [inputCode, setInputCode] = useState("");
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -71,7 +78,11 @@ export default function JamModal() {
   const isConnected = Boolean(code);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => (!open ? closeModal() : undefined)} maxWidth={480}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => (!open ? closeModal() : undefined)}
+      maxWidth={480}
+    >
       <div className="flex flex-col gap-[16px] px-[20px] pb-[20px]">
         <DialogHeader
           title={isConnected ? "Sessão Jam Ativa" : "Ouvir Juntos (Jam)"}
@@ -121,8 +132,9 @@ export default function JamModal() {
             {tab === "create" ? (
               <div className="flex flex-col gap-[16px] py-[6px]">
                 <p className="text-[13.5px] text-text-secondary leading-relaxed">
-                  Ao criar uma Jam, um código exclusivo de 6 dígitos será gerado. Compartilhe o código ou o link direto
-                  com seus amigos para começarem a ouvir juntos.
+                  Ao criar uma Jam, um código exclusivo de 6 dígitos será
+                  gerado. Compartilhe o código ou o link direto com seus amigos
+                  para começarem a ouvir juntos.
                 </p>
                 <DialogActions className="mt-[4px]">
                   <DialogButton type="button" onClick={closeModal}>
@@ -139,7 +151,10 @@ export default function JamModal() {
                 </DialogActions>
               </div>
             ) : (
-              <form onSubmit={handleJoinSubmit} className="flex flex-col gap-[20px] py-[10px]">
+              <form
+                onSubmit={handleJoinSubmit}
+                className="flex flex-col gap-[20px] py-[10px]"
+              >
                 <div className="flex flex-col items-center gap-[8px]">
                   <span className="text-[12px] uppercase font-semibold tracking-wider text-text-secondary">
                     Digite o código da Jam
@@ -216,13 +231,17 @@ export default function JamModal() {
               </div>
             ) : (
               <div className="flex items-center justify-between p-[10px] px-[12px] rounded-[10px] bg-white/[0.03] border border-white/[0.05]">
-                <span className="text-[12px] text-text-secondary">Permissão de controle:</span>
+                <span className="text-[12px] text-text-secondary">
+                  Permissão de controle:
+                </span>
                 <span
                   className={`text-[12px] font-semibold ${
                     allowGuestControl ? "text-emerald-400" : "text-amber-400"
                   }`}
                 >
-                  {allowGuestControl ? "Liberado para todos" : "Apenas o Host controla"}
+                  {allowGuestControl
+                    ? "Liberado para todos"
+                    : "Apenas o Host controla"}
                 </span>
               </div>
             )}
@@ -302,7 +321,8 @@ export default function JamModal() {
 
                 {queue.length === 0 ? (
                   <div className="py-[16px] text-center text-[13px] text-text-secondary/70">
-                    A fila da Jam está vazia. Adicione músicas clicando no menu de qualquer faixa.
+                    A fila da Jam está vazia. Adicione músicas clicando no menu
+                    de qualquer faixa.
                   </div>
                 ) : (
                   queue.map((track, i) => (

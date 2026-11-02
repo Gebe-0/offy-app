@@ -41,7 +41,9 @@ export const LINER_DISCORD_APPLICATION_ID = "1561339119617974362";
 
 function builtInApplicationId(): string {
   return (
-    process.env.OFFY_DISCORD_CLIENT_ID?.trim() || process.env.LINER_DISCORD_CLIENT_ID?.trim() || LINER_DISCORD_APPLICATION_ID
+    process.env.OFFY_DISCORD_CLIENT_ID?.trim() ||
+    process.env.LINER_DISCORD_CLIENT_ID?.trim() ||
+    LINER_DISCORD_APPLICATION_ID
   );
 }
 

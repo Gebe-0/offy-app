@@ -53,8 +53,8 @@ Set `LINER_SIMULATE` before `pnpm dev`, or put it in `.env.local`, to test how t
 | `youtube-timeout` | Requests to YouTube hosts (`youtube.com`, `googlevideo.com`, `ytimg.com`, `ggpht.com`) hang until the caller gives up. |
 | `youtube-blocked` | Requests to YouTube hosts fail at once, as with a regional or ISP block.                                               |
 | `youtube-refused` | YouTube answers, but every `googlevideo.com` stream returns HTTP 403, as when YouTube rejects a VPN or flagged IP.     |
-| `offy-timeout`   | Requests to `*.tryoffy.fun` and `VITE_API_URL` hang until the caller gives up.                                        |
-| `offy-down`      | Requests to `*.tryoffy.fun` and `VITE_API_URL` fail at once.                                                          |
+| `offy-timeout`    | Requests to `*.tryoffy.fun` and `VITE_API_URL` hang until the caller gives up.                                         |
+| `offy-down`       | Requests to `*.tryoffy.fun` and `VITE_API_URL` fail at once.                                                           |
 
 Combine values with commas, for example `LINER_SIMULATE=offy-down,youtube-blocked`. `LINER_SIMULATE_COUNTRY=RU` makes the network probe report that country, which the "YouTube isn't available in …" modal names. To test the device-offline modal, open DevTools (`Ctrl+Shift+I`), choose Network, then Offline, or turn off Wi-Fi. The switch lives in `electron/netsim/` and cancels matching requests in the default session, so renderer fetches, `<audio>` streams and main-process `net.fetch` calls all see the failure. Node `fetch` calls in the main process, such as the bundle updater, are not affected.
 

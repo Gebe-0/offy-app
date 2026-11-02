@@ -32,7 +32,12 @@ export default function CheckFrame({ action, attempt }: CheckFrameProps) {
       if (event.origin !== origin) return;
       if (event.source !== frameRef.current?.contentWindow) return;
       const data = event.data;
-      if ((data?.source !== "offy-turnstile" && data?.source !== "liner-turnstile") || data.action !== action) return;
+      if (
+        (data?.source !== "offy-turnstile" &&
+          data?.source !== "liner-turnstile") ||
+        data.action !== action
+      )
+        return;
       if (data.type === "token" && data.token) solve(data.token);
       else if (data.type === "expired") setPhase("expired");
       else if (data.type === "error") setPhase("error");

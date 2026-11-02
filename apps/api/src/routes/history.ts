@@ -158,43 +158,39 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
         from playback_events e join tracks t on t.id = e.track_id
         where e.created_at > now() - ${WINDOWS[window]}::interval
         group by t.id
+        having count(distinct e.user_id) >= 2
         order by count(*) desc
         limit ${limit}
       `;
 
-      if (rows.length === 0) {
+      if (rows.length < 5) {
         rows = await sql`
           select t.*, count(*) as play_count, count(distinct e.user_id) as unique_listeners
           from playback_events e join tracks t on t.id = e.track_id
           group by t.id
+          having count(distinct e.user_id) >= 2
           order by count(*) desc
-          limit ${limit}
-        `;
-      }
-
-      if (rows.length === 0) {
-        rows = await sql`
-          select t.*, 1 as play_count, 1 as unique_listeners
-          from tracks t
-          order by t.refreshed_at desc
           limit ${limit}
         `;
       }
 
       if (rows.length < 5) {
         try {
-          const hits = await search("top hits", "track");
+          const hits = await search("top brasil", "track");
           for (const hit of hits) {
             if (hit.type === "track") {
               await upsertTrack(sql, hit as any);
             }
           }
-          rows = await sql`
-            select t.*, 1 as play_count, 1 as unique_listeners
-            from tracks t
-            order by t.refreshed_at desc
-            limit ${limit}
-          `;
+          const hitIds = hits.filter((h) => h.type === "track").map((h) => h.id);
+          if (hitIds.length > 0) {
+            rows = await sql`
+              select t.*, 1 as play_count, 1 as unique_listeners
+              from tracks t
+              where t.id in ${sql(hitIds)}
+              limit ${limit}
+            `;
+          }
         } catch {
           // ignore
         }
@@ -230,21 +226,45 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
         from playback_events e join tracks t on t.id = e.track_id
         where e.created_at > now() - ${WINDOWS[window]}::interval and t.album is not null
         group by t.album, t.artists, t.cover
+        having count(distinct e.user_id) >= 2
         order by count(*) desc
         limit ${limit}
       `;
 
-      if (rows.length === 0) {
+      if (rows.length < 3) {
         rows = await sql`
           select t.album,
                  coalesce(t.album->>'artist', (t.artists->0->>'name'), '') as artist,
                  coalesce(t.album->>'coverUrl', t.cover->>'url', null) as cover_url,
-                 1 as play_count, 1 as unique_listeners
-          from tracks t
+                 count(*) as play_count, count(distinct e.user_id) as unique_listeners
+          from playback_events e join tracks t on t.id = e.track_id
           where t.album is not null
-          order by t.refreshed_at desc
+          group by t.album, t.artists, t.cover
+          having count(distinct e.user_id) >= 2
+          order by count(*) desc
           limit ${limit}
         `;
+      }
+
+      if (rows.length < 3) {
+        try {
+          const hits = await search("top brasil", "album");
+          return reply.send({
+            window,
+            items: hits.slice(0, limit).map((hit: any) => ({
+              id: String(hit.id ?? ""),
+              title: String(hit.title ?? ""),
+              artist: Array.isArray(hit.artists) ? hit.artists.map((a: any) => a.name).join(", ") : "",
+              coverUrl: hit.cover?.url ?? null,
+              playCount: 1,
+              uniqueListeners: 1,
+              trackCount: 10,
+              score: 1,
+            })),
+          });
+        } catch {
+          // ignore
+        }
       }
 
       return reply.send({
@@ -278,6 +298,7 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
         from collections
         where (${type} = 'all' or kind = ${type === "album" ? "albums" : type === "playlist" ? "playlists" : type})
         group by kind, item_id, snapshot
+        having count(distinct user_id) >= 2
         order by count(*) desc
         limit ${limit}
       `;

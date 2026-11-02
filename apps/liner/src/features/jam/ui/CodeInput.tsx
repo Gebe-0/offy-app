@@ -16,9 +16,13 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
     const nextEmptyIndex = chars.findIndex((c) => !c);
     const targetIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
     inputRefs.current[targetIndex]?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const rawVal = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!rawVal) {
       const next = value.slice(0, index) + value.slice(index + 1);
@@ -45,7 +49,10 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === "Backspace") {
       if (!chars[index] && index > 0) {
         inputRefs.current[index - 1]?.focus();
@@ -67,7 +74,11 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
     let text = rawText.trim();
     // Se colou o link completo (web ou offy://), extrai o parâmetro ou pathname final
     try {
-      if (text.includes("://") || text.startsWith("offy:") || text.startsWith("http")) {
+      if (
+        text.includes("://") ||
+        text.startsWith("offy:") ||
+        text.startsWith("http")
+      ) {
         const url = new URL(text);
         const idParam = url.searchParams.get("id");
         if (idParam) {
@@ -83,8 +94,11 @@ export function CodeInput({ value, onChange, disabled }: CodeInputProps) {
       // Ignora erro de parsing de URL
     }
 
-    const match = text.match(/([A-HJ-NP-Z2-9]{6})/i) || text.match(/([A-Z0-9]{6})/i);
-    const clean = (match ? match[1]! : text.replace(/[^A-Z0-9]/gi, "")).toUpperCase().slice(0, 6);
+    const match =
+      text.match(/([A-HJ-NP-Z2-9]{6})/i) || text.match(/([A-Z0-9]{6})/i);
+    const clean = (match ? match[1]! : text.replace(/[^A-Z0-9]/gi, ""))
+      .toUpperCase()
+      .slice(0, 6);
 
     if (clean) {
       onChange(clean);

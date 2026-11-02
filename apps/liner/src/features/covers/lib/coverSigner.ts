@@ -5,7 +5,10 @@ import { YOUTUBE_THUMBNAIL_HOST } from "@/shared/youtube/playlist/youtubeUrl";
 // hmac token is computed in-memory via rust wasm module
 
 const COVER_PROXY_BASE =
-  (import.meta.env.VITE_COVERS_PROXY_URL as string | undefined)?.replace(/\/+$/, "") || "";
+  (import.meta.env.VITE_COVERS_PROXY_URL as string | undefined)?.replace(
+    /\/+$/,
+    "",
+  ) || "";
 const COVER_PROXY_SIZE = 1024;
 
 // Must mirror ALLOWED_HOSTS in apps/workers/covers: a token for any other host
@@ -78,7 +81,11 @@ async function computeFallback(coverUrl: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
-  if (!COVER_PROXY_BASE || parsed.protocol !== "https:" || !COVER_PROXY_HOSTS.has(parsed.hostname)) {
+  if (
+    !COVER_PROXY_BASE ||
+    parsed.protocol !== "https:" ||
+    !COVER_PROXY_HOSTS.has(parsed.hostname)
+  ) {
     return undefined;
   }
   const payload = base64UrlEncode(

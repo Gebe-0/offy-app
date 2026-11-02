@@ -13,7 +13,7 @@ export default function UpdateModal() {
 
   if (!updateInfo) return null;
 
-  const releaseTag = updateInfo.version.startsWith("v")
+  const _releaseTag = updateInfo.version.startsWith("v")
     ? updateInfo.version
     : `v${updateInfo.version}`;
   const changelogUrl = "#";

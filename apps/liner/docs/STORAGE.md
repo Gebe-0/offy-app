@@ -5,11 +5,11 @@ should go.
 
 All paths below are under Electron's `userData` folder:
 
-| OS      | `userData`                                                      |
-| ------- | --------------------------------------------------------------- |
+| OS      | `userData`                                                    |
+| ------- | ------------------------------------------------------------- |
 | Linux   | `~/.config/@offy/client` (dev) or `~/.config/OFFY` (packaged) |
-| Windows | `%APPDATA%\OFFY`                                               |
-| macOS   | `~/Library/Application Support/OFFY`                           |
+| Windows | `%APPDATA%\OFFY`                                              |
+| macOS   | `~/Library/Application Support/OFFY`                          |
 
 ## IndexedDB: `offy_db_v1`
 
@@ -31,7 +31,7 @@ played tracks are evicted (`src/shared/storage/audioCache.ts`).
 
 | Path                               | Holds                                          | Code                               |
 | ---------------------------------- | ---------------------------------------------- | ---------------------------------- |
-| `auth/session.json`                | OFFY session, encrypted with `safeStorage`    | `electron/auth-session-store.ts`   |
+| `auth/session.json`                | OFFY session, encrypted with `safeStorage`     | `electron/auth-session-store.ts`   |
 | `auth/youtube-session.json`        | YouTube account tokens, encrypted the same way | `electron/auth-session-ipc.ts`     |
 | `local-tracks/library.json`        | Index of imported audio files                  | `electron/local-tracks/library.ts` |
 | `local-tracks/audio/<hash>.<ext>`  | Copies of imported audio files                 | same                               |
@@ -45,19 +45,19 @@ protocol (`electron/local-tracks/protocol.ts`), never through IndexedDB.
 
 Settings and small state, as zustand `persist` stores or plain keys.
 
-| Key                                                                   | Holds                                                                                                    |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `offy_player_session_v2`                                             | Repeat, shuffle, volume and player settings; the queue and position only when "resume" is the start mode |
-| `offy_lyrics_session_v1`                                             | Lyrics view settings                                                                                     |
-| `offy_customization_v1`                                              | Appearance settings                                                                                      |
-| `offy_shortcuts_settings_v1`                                         | Keyboard shortcuts                                                                                       |
-| `offy_overlay_settings_v1`                                           | Overlay settings                                                                                         |
-| `offy_discord_settings_v1`                                           | Discord Rich Presence settings                                                                           |
-| `offy_youtube_preferences`                                           | YouTube playback and sync settings                                                                       |
-| `offy_youtube_page_id`                                               | The brand channel picked for the YouTube account                                                         |
-| `offy_search_history`                                                | Recent searches                                                                                          |
-| `offy_library_view_mode`                                             | Grid or list in the library                                                                              |
-| `offy_locale`, `theme`                                               | Language and theme                                                                                       |
+| Key                                                               | Holds                                                                                                    |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `offy_player_session_v2`                                          | Repeat, shuffle, volume and player settings; the queue and position only when "resume" is the start mode |
+| `offy_lyrics_session_v1`                                          | Lyrics view settings                                                                                     |
+| `offy_customization_v1`                                           | Appearance settings                                                                                      |
+| `offy_shortcuts_settings_v1`                                      | Keyboard shortcuts                                                                                       |
+| `offy_overlay_settings_v1`                                        | Overlay settings                                                                                         |
+| `offy_discord_settings_v1`                                        | Discord Rich Presence settings                                                                           |
+| `offy_youtube_preferences`                                        | YouTube playback and sync settings                                                                       |
+| `offy_youtube_page_id`                                            | The brand channel picked for the YouTube account                                                         |
+| `offy_search_history`                                             | Recent searches                                                                                          |
+| `offy_library_view_mode`                                          | Grid or list in the library                                                                              |
+| `offy_locale`, `theme`                                            | Language and theme                                                                                       |
 | `offy_lyrics_*`, `offy:artist:*`, `offy:search:*`, `offy:query:*` | Small caches                                                                                             |
 
 `offy_auth_session` and `offy_youtube_tv_session` are legacy keys. They are moved
@@ -79,7 +79,7 @@ into the encrypted files above on first launch and then removed.
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Audio    | `audio` and `tracks` stores, then **every** `*.indexeddb.blob` folder and `blob_storage`; with all categories selected, the whole IndexedDB |
 | Covers   | CacheStorage and the service worker folder                                                                                                  |
-| Lyrics   | `lyrics` store, `offy_lyrics_*` keys and the lyrics session                                                                                |
+| Lyrics   | `lyrics` store, `offy_lyrics_*` keys and the lyrics session                                                                                 |
 | Metadata | `artists` store, `queryCache`, search caches and search history                                                                             |
 | Any      | Chromium's HTTP cache                                                                                                                       |
 
