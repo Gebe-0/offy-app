@@ -44,6 +44,20 @@ export interface JamRoom {
 
 const rooms = new Map<string, JamRoom>();
 
+// Limpeza automática de salas inativas ou abandonadas
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms.entries()) {
+    const noSubscribersTimeout =
+      room.subscribers.size === 0 && now - room.updatedAt > 15 * 60 * 1000;
+    const maxLifetimeTimeout = now - room.updatedAt > 12 * 60 * 60 * 1000;
+    if (noSubscribersTimeout || maxLifetimeTimeout) {
+      broadcast(room, "jam_closed", { reason: "timeout" });
+      rooms.delete(code);
+    }
+  }
+}, 60 * 1000);
+
 function sanitizeRoom(room: JamRoom) {
   return {
     code: room.code,
@@ -175,6 +189,22 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const user = await getUserInfo(userId);
       const isHost = room.hostId === userId;
+
+      // Remove de outras salas onde o usuário estava participando
+      for (const [existingCode, existingRoom] of rooms.entries()) {
+        if (existingCode !== code && existingRoom.participants.has(userId)) {
+          if (existingRoom.hostId === userId) {
+            broadcast(existingRoom, "jam_closed", { reason: "host_recreated" });
+            rooms.delete(existingCode);
+          } else {
+            existingRoom.participants.delete(userId);
+            broadcast(existingRoom, "participant_left", {
+              userId,
+              participants: Array.from(existingRoom.participants.values()),
+            });
+          }
+        }
+      }
 
       room.participants.set(userId, {
         ...user,
@@ -768,9 +798,13 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         Abrir no OFFY
       </a>
 
-      <button type="button" class="btn-secondary" id="copyBtn" onclick="copyCode()">
+      <button type="button" class="btn-secondary" id="copyBtn" onclick="copyCode()" style="margin-bottom: 0.75rem;">
         Copiar Código
       </button>
+
+      <a href="https://github.com/Gebe-0/offy-app/releases/latest" class="btn-secondary" target="_blank" rel="noopener noreferrer">
+        Baixar o OFFY para Windows
+      </a>
     </div>
 
     <div class="footer">
@@ -786,13 +820,17 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         setTimeout(() => { btn.innerText = 'Copiar Código'; }, 2000);
       });
     }
-
-    // Tenta abrir o app no desktop automaticamente
-    window.location.href = "${appDeepLink}";
   </script>
 </body>
 </html>`;
 
     reply.type("text/html; charset=utf-8").send(html);
+  });
+
+  // Alias para /v1/jam/:code/invite
+  app.get("/v1/jam/:code/invite", async (request, reply) => {
+    const params = request.params as { code?: string };
+    const code = (params.code ?? "").toUpperCase().trim();
+    return reply.redirect(`/jam/${code}`);
   });
 }

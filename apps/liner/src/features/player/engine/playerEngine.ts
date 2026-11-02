@@ -492,6 +492,14 @@ class PlayerEngine {
     preserveQueue?: boolean,
     startPositionMs: number = 0,
   ): Promise<void> {
+    if (
+      context !== "jam" &&
+      this.jamBridge &&
+      !this.jamBridge.canControlPlayback()
+    ) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const nextQueue = this.normalizeQueue(queue ?? [track], track);
     const nextIndex =

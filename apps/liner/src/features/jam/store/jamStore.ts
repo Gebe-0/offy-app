@@ -458,6 +458,18 @@ function startRealtimeSync(code: string, token: string) {
     }
   });
 
+  es.onerror = () => {
+    // Se a conexão cair ou o token de acesso expirar, reconecta com token renovado
+    if (es.readyState === EventSource.CLOSED) {
+      void getValidAccessToken().then((freshToken) => {
+        const currentCode = useJamStore.getState().code;
+        if (currentCode && freshToken) {
+          startRealtimeSync(currentCode, freshToken);
+        }
+      });
+    }
+  };
+
   // Polling de contingência a cada 4 segundos (garante consistência mesmo se a rede falhar)
   pollIntervalTimer = setInterval(async () => {
     const { code, isHost } = useJamStore.getState();
@@ -595,7 +607,6 @@ function syncRemoteTrack(
 
   lastSyncTrackId = track.id;
   lastSyncTrackTime = now;
-  lastKnownHostTrackId = track.id;
 
   const clientTrack = toClientTrack(track);
 
@@ -654,15 +665,18 @@ function handleRemoteSync(event: JamSyncEvent) {
 
   if (event.action === "PLAY") {
     if (Math.abs(currentPos - targetPos) > 2500) {
+      usePlayerStore.getState().setPosition(targetPos);
       playerRuntime?.seek(targetPos);
     }
     playerRuntime?.resume();
   } else if (event.action === "PAUSE") {
     playerRuntime?.pause();
     if (event.positionMs !== undefined) {
+      usePlayerStore.getState().setPosition(event.positionMs);
       playerRuntime?.seek(event.positionMs);
     }
   } else if (event.action === "SEEK") {
+    usePlayerStore.getState().setPosition(event.positionMs);
     playerRuntime?.seek(event.positionMs);
   }
 }

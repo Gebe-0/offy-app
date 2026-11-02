@@ -13,6 +13,7 @@ import { playerEngine } from "@/features/player";
 import { queryCache } from "@/shared/cache/queryCache";
 import { clearScreenCache } from "@/shared/cache/screenCache";
 import { useSearchHistoryStore } from "@/features/search/store/searchHistoryStore";
+import { useJamStore } from "@/features/jam/store/jamStore";
 
 export type AuthStatus = "initializing" | "authenticated" | "anonymous";
 export type AuthState = {
@@ -136,6 +137,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     return updated;
   },
   logout: async () => {
+    void useJamStore.getState().leaveJam();
     await clearPlayback();
     useSearchHistoryStore.getState().clearHistory();
     try {

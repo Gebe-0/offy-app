@@ -18,6 +18,24 @@ const app = Fastify({
   bodyLimit: 8 * 1024 * 1024,
 });
 
+// Suporta corpos vazios com content-type: application/json sem erro FST_ERR_CTP_EMPTY_JSON_BODY
+app.addContentTypeParser(
+  "application/json",
+  { parseAs: "string" },
+  (_req, body, done) => {
+    if (!body || (typeof body === "string" && body.trim().length === 0)) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  },
+);
+
 await app.register(cors, {
   origin: env.corsOrigin === "*" ? true : env.corsOrigin.split(","),
   credentials: true,
