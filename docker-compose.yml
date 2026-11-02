@@ -1,21 +1,40 @@
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: offy
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-offy_secret_pass_2026}
+      POSTGRES_DB: offy
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U offy -d offy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 8080
       HOST: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_URL_DIRECT: ${DATABASE_URL_DIRECT}
-      AUTH_SECRET: ${AUTH_SECRET}
+      DATABASE_URL: ${DATABASE_URL:-postgres://offy:offy_secret_pass_2026@db:5432/offy}
+      DATABASE_URL_DIRECT: ${DATABASE_URL_DIRECT:-postgres://offy:offy_secret_pass_2026@db:5432/offy}
+      AUTH_SECRET: ${AUTH_SECRET:-offy_super_secret_auth_token_key_2026}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL: info
     expose:
       - "8080"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 60s
+      interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
@@ -29,12 +48,13 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://137.131.148.92, https://137.131.148.92.sslip.io}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:
