@@ -4,6 +4,8 @@ import { Book2, QuestionCircle } from "@solar-icons/react";
 import { useScrollFade } from "@/shared/hooks";
 import TextInput from "@/shared/ui/TextInput";
 import { useTranslation } from "@/languages";
+import { getApiBaseUrl } from "@/shared/api";
+import { showToast } from "@/shared/ui";
 import { SettingsUserFooter } from "./SettingsUserFooter";
 import {
   NavItem,
@@ -94,11 +96,25 @@ export function SettingsSidebar<T extends string>({
 
         <div className="flex flex-col gap-[1px]">
           <GroupLabel>{t("settings.groups.help")}</GroupLabel>
-          <NavItem icon={Book2} label={t("settings.docs")} onClick={() => {}} />
+          <NavItem
+            icon={Book2}
+            label={t("settings.docs")}
+            onClick={() => {
+              const url = `${getApiBaseUrl()}/docs`;
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
+          />
           <NavItem
             icon={QuestionCircle}
             label={t("settings.support")}
-            onClick={() => {}}
+            onClick={() => {
+              void navigator.clipboard?.writeText("@arlw_").catch(() => {});
+              showToast.checkmark(
+                "Discord copiado: @arlw_! Abrindo suporte...",
+              );
+              const url = `${getApiBaseUrl()}/docs#suporte`;
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
           />
         </div>
       </nav>
