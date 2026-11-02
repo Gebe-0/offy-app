@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @offy/api dev",
     "start": "pnpm --filter @offy/api start",
-    "build": "pnpm --filter @offy/contracts build && pnpm --filter @offy/core build",
+    "build": "pnpm --filter @offy/contracts build && pnpm --filter @offy/core build && pnpm --filter @offy/api build",
     "migrate": "node scripts/migrate.mjs",
     "smoke": "pnpm --filter @offy/api exec tsx src/smoke.ts",
     "typecheck": "pnpm -r typecheck"
