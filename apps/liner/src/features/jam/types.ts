@@ -1,3 +1,5 @@
+import type { Track } from "@/shared/types";
+
 export interface JamParticipant {
   userId: string;
   username: string;
@@ -10,17 +12,20 @@ export interface JamParticipant {
 export interface JamRoomState {
   code: string;
   hostId: string;
+  hostName: string;
   createdAt: number;
-  currentTrack: any | null;
+  currentTrack: Track | null;
   status: "playing" | "paused" | "idle";
   positionMs: number;
   updatedAt: number;
+  allowGuestControl: boolean;
+  queue: Track[];
   participants: JamParticipant[];
 }
 
 export interface JamSyncEvent {
   action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE";
-  track?: any;
+  track?: Track;
   status: "playing" | "paused" | "idle";
   positionMs: number;
   updatedAt: number;

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import Dialog from "@/shared/ui/Dialog";
-import { DialogActions, DialogButton, DialogHeader } from "@/shared/ui";
+import { DialogActions, DialogButton, DialogHeader, ToggleSwitch } from "@/shared/ui";
 import { showToast } from "@/shared/ui";
+import { usePlayerStore } from "@/features/player";
 import { useJamStore } from "../store/jamStore";
 import { CodeInput } from "./CodeInput";
 
@@ -13,15 +14,22 @@ export default function JamModal() {
     isHost,
     isConnecting,
     error,
+    allowGuestControl,
+    queue,
     participants,
     shareUrl,
     jamDeepLink,
     createJam,
     joinJam,
     leaveJam,
+    updateSettings,
+    removeFromQueue,
   } = useJamStore();
 
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+
   const [tab, setTab] = useState<"create" | "join">("create");
+  const [activeTab, setActiveTab] = useState<"participants" | "queue">("participants");
   const [inputCode, setInputCode] = useState("");
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -63,15 +71,15 @@ export default function JamModal() {
   const isConnected = Boolean(code);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => (!open ? closeModal() : undefined)} maxWidth={440}>
+    <Dialog open={isOpen} onOpenChange={(open) => (!open ? closeModal() : undefined)} maxWidth={480}>
       <div className="flex flex-col gap-[16px] px-[20px] pb-[20px]">
         <DialogHeader
           title={isConnected ? "Sessão Jam Ativa" : "Ouvir Juntos (Jam)"}
           description={
             isConnected
               ? isHost
-                ? "Você é o Host. Suas músicas e ações serão sincronizadas com todos na sala."
-                : "Você está conectado. As músicas estão sendo sincronizadas pelo Host."
+                ? "Você é o Host da sessão. Controle as permissões e gerencie a reprodução em grupo."
+                : "Você está conectado à sessão. A música é sincronizada em tempo real."
               : "Ouça suas músicas favoritas sincronizadas com seus amigos em tempo real."
           }
         />
@@ -165,7 +173,7 @@ export default function JamModal() {
           /* Estado Ativo da Jam */
           <div className="flex flex-col gap-[16px]">
             {/* Box com o código */}
-            <div className="flex flex-col items-center justify-center p-[16px] rounded-[14px] bg-fill border border-white/[0.08]">
+            <div className="flex flex-col items-center justify-center p-[16px] rounded-[16px] bg-fill border border-white/[0.08]">
               <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-[4px]">
                 Código da Jam
               </span>
@@ -190,25 +198,71 @@ export default function JamModal() {
               </div>
             </div>
 
-            {/* Participantes */}
-            <div className="flex flex-col gap-[8px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] uppercase font-semibold tracking-wider text-text-secondary">
-                  Participantes ({participants.length})
-                </span>
-                <span className="inline-flex items-center gap-[6px] text-[12px] text-emerald-400 font-medium">
-                  <span className="w-[7px] h-[7px] rounded-full bg-emerald-400 animate-pulse" />
-                  Sincronizado
+            {/* Configuração de Permissões (Host) ou Status (Guest) */}
+            {isHost ? (
+              <div className="flex items-center justify-between p-[12px] rounded-[12px] bg-white/[0.03] border border-white/[0.06]">
+                <div className="flex flex-col gap-[2px]">
+                  <span className="text-[13px] font-semibold text-text-primary">
+                    Controle de convidados
+                  </span>
+                  <span className="text-[11.5px] text-text-secondary leading-snug">
+                    Permitir que amigos alterem, pausem ou avancem músicas
+                  </span>
+                </div>
+                <ToggleSwitch
+                  checked={allowGuestControl}
+                  onChange={(checked) => void updateSettings(checked)}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-[10px] px-[12px] rounded-[10px] bg-white/[0.03] border border-white/[0.05]">
+                <span className="text-[12px] text-text-secondary">Permissão de controle:</span>
+                <span
+                  className={`text-[12px] font-semibold ${
+                    allowGuestControl ? "text-emerald-400" : "text-amber-400"
+                  }`}
+                >
+                  {allowGuestControl ? "Liberado para todos" : "Apenas o Host controla"}
                 </span>
               </div>
-              <div className="max-h-[140px] overflow-y-auto flex flex-col gap-[6px] pr-[4px]">
+            )}
+
+            {/* Abas Participantes / Fila */}
+            <div className="flex p-[3px] rounded-item bg-fill">
+              <button
+                type="button"
+                onClick={() => setActiveTab("participants")}
+                className={`flex-1 h-[30px] rounded-[8px] text-[13px] font-[500] transition-all cursor-pointer border-none ${
+                  activeTab === "participants"
+                    ? "bg-fill-hover text-text-primary font-semibold"
+                    : "bg-transparent text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Participantes ({participants.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("queue")}
+                className={`flex-1 h-[30px] rounded-[8px] text-[13px] font-[500] transition-all cursor-pointer border-none ${
+                  activeTab === "queue"
+                    ? "bg-fill-hover text-text-primary font-semibold"
+                    : "bg-transparent text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Fila da Jam ({queue.length})
+              </button>
+            </div>
+
+            {activeTab === "participants" ? (
+              /* Lista de Participantes */
+              <div className="max-h-[150px] overflow-y-auto flex flex-col gap-[6px] pr-[4px]">
                 {participants.map((p) => (
                   <div
                     key={p.userId}
-                    className="flex items-center justify-between px-[10px] py-[6px] rounded-[8px] bg-white/[0.03]"
+                    className="flex items-center justify-between px-[10px] py-[8px] rounded-[10px] bg-white/[0.03]"
                   >
                     <div className="flex items-center gap-[8px]">
-                      <div className="w-[28px] h-[28px] rounded-full bg-white/[0.1] flex items-center justify-center text-[12px] font-bold text-text-primary">
+                      <div className="w-[30px] h-[30px] rounded-full bg-white/[0.1] flex items-center justify-center text-[12px] font-bold text-text-primary">
                         {p.displayName.slice(0, 1).toUpperCase()}
                       </div>
                       <span className="text-[13px] font-medium text-text-primary">
@@ -216,19 +270,83 @@ export default function JamModal() {
                       </span>
                     </div>
                     {p.isHost && (
-                      <span className="text-[10.5px] uppercase font-bold tracking-wider px-[6px] py-[2px] rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-[7px] py-[2px] rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25">
                         Host
                       </span>
                     )}
                   </div>
                 ))}
               </div>
-            </div>
+            ) : (
+              /* Fila da Jam */
+              <div className="flex flex-col gap-[8px] max-h-[170px] overflow-y-auto pr-[4px]">
+                {currentTrack && (
+                  <div className="flex items-center gap-[10px] p-[8px] rounded-[10px] bg-primary/10 border border-primary/20">
+                    {currentTrack.coverUrl && (
+                      <img
+                        src={currentTrack.coverUrl}
+                        alt=""
+                        className="w-[34px] h-[34px] rounded-[6px] object-cover"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] uppercase font-bold text-primary tracking-wider">
+                        Tocando agora
+                      </div>
+                      <div className="text-[13px] font-semibold text-text-primary truncate">
+                        {currentTrack.title}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {queue.length === 0 ? (
+                  <div className="py-[16px] text-center text-[13px] text-text-secondary/70">
+                    A fila da Jam está vazia. Adicione músicas clicando no menu de qualquer faixa.
+                  </div>
+                ) : (
+                  queue.map((track, i) => (
+                    <div
+                      key={`${track.id}-${i}`}
+                      className="flex items-center justify-between gap-[8px] p-[8px] rounded-[10px] bg-white/[0.03]"
+                    >
+                      <div className="flex items-center gap-[8px] min-w-0">
+                        {track.coverUrl && (
+                          <img
+                            src={track.coverUrl}
+                            alt=""
+                            className="w-[32px] h-[32px] rounded-[6px] object-cover"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-[12.5px] font-medium text-text-primary truncate">
+                            {track.title}
+                          </div>
+                          <div className="text-[11.5px] text-text-secondary truncate">
+                            {track.artists}
+                          </div>
+                        </div>
+                      </div>
+                      {(isHost || allowGuestControl) && (
+                        <button
+                          type="button"
+                          onClick={() => void removeFromQueue(track.id)}
+                          className="text-[12px] text-text-secondary hover:text-red-400 p-[4px] bg-transparent border-none cursor-pointer"
+                          title="Remover da fila"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             {/* Ações */}
-            <DialogActions className="mt-[4px]">
+            <DialogActions className="mt-[6px]">
               <DialogButton type="button" onClick={closeModal}>
-                Fechar Janela
+                Fechar
               </DialogButton>
               <DialogButton
                 type="button"

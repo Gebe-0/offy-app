@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { getApiBaseUrl } from "@/shared/api/baseUrl";
 import { getValidAccessToken } from "@/shared/api/auth-session";
+import { toClientTrack } from "@/shared/api/track";
 import { showToast } from "@/shared/ui";
 import { usePlayerStore, playerEngine, playerRuntime } from "@/features/player";
 import type { Track } from "@/shared/types";
 import type { JamParticipant, JamRoomState, JamSyncEvent } from "../types";
 
 let activeEventSource: EventSource | null = null;
+let pollIntervalTimer: ReturnType<typeof setInterval> | null = null;
 let isRemoteSyncing = false;
 let lastKnownHostTrackId: string | null = null;
 let lastSyncTimestamp = 0;
@@ -17,6 +19,8 @@ export interface JamState {
   isOpen: boolean;
   isConnecting: boolean;
   error: string | null;
+  allowGuestControl: boolean;
+  queue: Track[];
   participants: JamParticipant[];
   shareUrl: string | null;
   jamDeepLink: string | null;
@@ -26,6 +30,9 @@ export interface JamState {
   createJam: () => Promise<void>;
   joinJam: (code: string) => Promise<boolean>;
   leaveJam: () => Promise<void>;
+  updateSettings: (allowGuestControl: boolean) => Promise<void>;
+  addToQueue: (track: Track) => Promise<void>;
+  removeFromQueue: (trackId: string) => Promise<void>;
 }
 
 export const useJamStore = create<JamState>((set, get) => ({
@@ -34,6 +41,8 @@ export const useJamStore = create<JamState>((set, get) => ({
   isOpen: false,
   isConnecting: false,
   error: null,
+  allowGuestControl: true,
+  queue: [],
   participants: [],
   shareUrl: null,
   jamDeepLink: null,
@@ -49,13 +58,19 @@ export const useJamStore = create<JamState>((set, get) => ({
         throw new Error("Você precisa estar conectado para criar uma Jam.");
       }
 
+      const currentPlayerState = usePlayerStore.getState();
+      const currentTrack = currentPlayerState.currentTrack ?? undefined;
+
       const res = await fetch(`${getApiBaseUrl()}/v1/jam/create`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          currentTrack,
+          allowGuestControl: get().allowGuestControl,
+        }),
       });
 
       if (!res.ok) {
@@ -73,6 +88,8 @@ export const useJamStore = create<JamState>((set, get) => ({
       set({
         code: data.room.code,
         isHost: true,
+        allowGuestControl: data.room.allowGuestControl ?? true,
+        queue: (data.room.queue || []).map(toClientTrack),
         participants: data.room.participants,
         shareUrl: data.shareUrl,
         jamDeepLink: data.jamUrl,
@@ -80,17 +97,7 @@ export const useJamStore = create<JamState>((set, get) => ({
         isOpen: true,
       });
 
-      connectJamEvents(data.room.code, token);
-
-      // Se já estiver tocando uma faixa localmente, sincroniza imediatamente
-      const currentPlayerState = usePlayerStore.getState();
-      if (currentPlayerState.currentTrack) {
-        void sendJamSync(data.room.code, token, {
-          action: "TRACK_CHANGE",
-          track: currentPlayerState.currentTrack,
-          positionMs: currentPlayerState.positionMs,
-        });
-      }
+      startRealtimeSync(data.room.code, token);
 
       showToast.checkmark(`Jam criada com sucesso! Código: ${data.room.code}`);
     } catch (err: unknown) {
@@ -135,6 +142,7 @@ export const useJamStore = create<JamState>((set, get) => ({
         ok: boolean;
         room: JamRoomState;
         jamUrl: string;
+        shareUrl: string;
       };
 
       const isHost = data.room.hostId === data.room.participants.find((p) => p.isHost)?.userId;
@@ -142,18 +150,25 @@ export const useJamStore = create<JamState>((set, get) => ({
       set({
         code: data.room.code,
         isHost,
+        allowGuestControl: data.room.allowGuestControl ?? true,
+        queue: (data.room.queue || []).map(toClientTrack),
         participants: data.room.participants,
-        shareUrl: `https://offy-api-fp82.onrender.com/jam/${data.room.code}`,
+        shareUrl: data.shareUrl,
         jamDeepLink: data.jamUrl,
         isConnecting: false,
         isOpen: true,
       });
 
-      connectJamEvents(data.room.code, token);
+      startRealtimeSync(data.room.code, token);
 
-      // Sincroniza áudio inicial se houver música ativa na sala
+      // Sincroniza faixa inicial se o Host estiver tocando
       if (data.room.currentTrack && !isHost) {
-        syncRemoteTrack(data.room.currentTrack as Track, data.room.status, data.room.positionMs, data.room.updatedAt);
+        syncRemoteTrack(
+          toClientTrack(data.room.currentTrack),
+          data.room.status,
+          data.room.positionMs,
+          data.room.updatedAt,
+        );
       }
 
       showToast.checkmark(`Conectado à Jam ${cleanCode}!`);
@@ -166,12 +181,91 @@ export const useJamStore = create<JamState>((set, get) => ({
     }
   },
 
+  updateSettings: async (allowGuestControl: boolean) => {
+    const { code, isHost } = get();
+    if (!code || !isHost) return;
+
+    set({ allowGuestControl });
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+
+      await fetch(`${getApiBaseUrl()}/v1/jam/${code}/settings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ allowGuestControl }),
+      });
+      showToast.checkmark(
+        allowGuestControl
+          ? "Convidados agora podem alterar e pausar músicas."
+          : "Controle de reprodução restrito ao Host.",
+      );
+    } catch {
+      // rollback if failed
+      set({ allowGuestControl: !allowGuestControl });
+    }
+  },
+
+  addToQueue: async (track: Track) => {
+    const { code, isHost, allowGuestControl } = get();
+    if (!code) return;
+    if (!isHost && !allowGuestControl) {
+      showToast.info("Apenas o Host pode adicionar músicas à fila da Jam.");
+      return;
+    }
+
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+
+      const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}/queue`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ track }),
+      });
+
+      if (res.ok) {
+        showToast.checkmark(`Adicionado à fila da Jam: ${track.title}`);
+      }
+    } catch {
+      showToast.error("Erro ao adicionar faixa à fila da Jam.");
+    }
+  },
+
+  removeFromQueue: async (trackId: string) => {
+    const { code, isHost, allowGuestControl } = get();
+    if (!code) return;
+    if (!isHost && !allowGuestControl) {
+      showToast.info("Apenas o Host pode gerenciar a fila da Jam.");
+      return;
+    }
+
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+
+      await fetch(`${getApiBaseUrl()}/v1/jam/${code}/queue/${encodeURIComponent(trackId)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // ignore
+    }
+  },
+
   leaveJam: async () => {
     const currentCode = get().code;
-    if (activeEventSource) {
-      activeEventSource.close();
-      activeEventSource = null;
-    }
+    stopRealtimeSync();
 
     if (currentCode) {
       try {
@@ -195,6 +289,7 @@ export const useJamStore = create<JamState>((set, get) => ({
       code: null,
       isHost: false,
       participants: [],
+      queue: [],
       shareUrl: null,
       jamDeepLink: null,
       error: null,
@@ -203,15 +298,70 @@ export const useJamStore = create<JamState>((set, get) => ({
   },
 }));
 
-function connectJamEvents(code: string, token: string) {
+function stopRealtimeSync() {
   if (activeEventSource) {
     activeEventSource.close();
     activeEventSource = null;
   }
+  if (pollIntervalTimer) {
+    clearInterval(pollIntervalTimer);
+    pollIntervalTimer = null;
+  }
+}
+
+function startRealtimeSync(code: string, token: string) {
+  stopRealtimeSync();
 
   const sseUrl = `${getApiBaseUrl()}/v1/jam/${encodeURIComponent(code)}/events?token=${encodeURIComponent(token)}`;
   const es = new EventSource(sseUrl);
   activeEventSource = es;
+
+  // Estado inicial completo recebido ao conectar
+  es.addEventListener("init", (e) => {
+    try {
+      const room = JSON.parse(e.data) as JamRoomState;
+      useJamStore.setState({
+        allowGuestControl: room.allowGuestControl ?? true,
+        queue: (room.queue || []).map(toClientTrack),
+        participants: room.participants,
+      });
+
+      const { isHost } = useJamStore.getState();
+      if (room.currentTrack && !isHost) {
+        syncRemoteTrack(
+          toClientTrack(room.currentTrack),
+          room.status,
+          room.positionMs,
+          room.updatedAt,
+        );
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  es.addEventListener("settings_updated", (e) => {
+    try {
+      const data = JSON.parse(e.data) as { allowGuestControl: boolean };
+      useJamStore.setState({ allowGuestControl: data.allowGuestControl });
+      showToast.info(
+        data.allowGuestControl
+          ? "O Host permitiu que todos controlem a música."
+          : "O Host restringiu o controle de reprodução.",
+      );
+    } catch {
+      // ignore
+    }
+  });
+
+  es.addEventListener("queue_updated", (e) => {
+    try {
+      const data = JSON.parse(e.data) as { queue: unknown[] };
+      useJamStore.setState({ queue: (data.queue || []).map(toClientTrack) });
+    } catch {
+      // ignore
+    }
+  });
 
   es.addEventListener("participant_joined", (e) => {
     try {
@@ -245,31 +395,63 @@ function connectJamEvents(code: string, token: string) {
       code: null,
       isHost: false,
       participants: [],
+      queue: [],
       shareUrl: null,
       jamDeepLink: null,
     });
-    if (activeEventSource) {
-      activeEventSource.close();
-      activeEventSource = null;
-    }
-    showToast.info("A sessão de Jam foi encerrada.");
+    stopRealtimeSync();
+    showToast.info("A sessão de Jam foi encerrada pelo Host.");
   });
 
   es.addEventListener("sync", (e) => {
-    const { isHost } = useJamStore.getState();
-    if (isHost) return; // Host não sobrescreve suas ações locais
-
+    const { isHost, allowGuestControl } = useJamStore.getState();
     try {
       const event = JSON.parse(e.data) as JamSyncEvent;
+      // Se quem enviou foi este próprio cliente, ignora
       handleRemoteSync(event);
     } catch {
       // ignore
     }
   });
 
-  es.onerror = () => {
-    // EventSource reconecta automaticamente no browser/Electron
-  };
+  // Polling de contingência a cada 4 segundos (garante consistência mesmo se a rede falhar)
+  pollIntervalTimer = setInterval(async () => {
+    const { code, isHost } = useJamStore.getState();
+    if (!code || isHost) return;
+
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}`);
+      if (res.ok) {
+        const data = (await res.json()) as { ok: boolean; room: JamRoomState };
+        if (data.room) {
+          useJamStore.setState({
+            allowGuestControl: data.room.allowGuestControl ?? true,
+            queue: (data.room.queue || []).map(toClientTrack),
+            participants: data.room.participants,
+          });
+
+          if (data.room.currentTrack) {
+            const currentTrack = usePlayerStore.getState().currentTrack;
+            const currentPos = usePlayerStore.getState().positionMs;
+            const status = usePlayerStore.getState().status;
+
+            const clientTrack = toClientTrack(data.room.currentTrack);
+            const elapsed = data.room.status === "playing" ? Math.max(0, Date.now() - data.room.updatedAt) : 0;
+            const expectedPos = data.room.positionMs + elapsed;
+
+            // Se a música for diferente ou houver drift maior que 4.5 segundos
+            if (currentTrack?.id !== clientTrack.id) {
+              syncRemoteTrack(clientTrack, data.room.status, data.room.positionMs, data.room.updatedAt);
+            } else if (Math.abs(currentPos - expectedPos) > 4500 && status === "playing") {
+              playerRuntime?.seek(expectedPos);
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore background poll error
+    }
+  }, 4000);
 }
 
 async function sendJamSync(
@@ -308,7 +490,7 @@ function syncRemoteTrack(
   const targetPos = Math.max(0, positionMs + elapsed);
 
   void playerEngine.playTrack(track, [track], track.artists, track.coverUrl).then(() => {
-    if (targetPos > 500) {
+    if (targetPos > 600) {
       playerRuntime?.seek(targetPos);
     }
     if (status === "paused") {
@@ -327,13 +509,12 @@ function handleRemoteSync(event: JamSyncEvent) {
   const currentTrack = usePlayerStore.getState().currentTrack;
 
   if (event.action === "TRACK_CHANGE" && event.track) {
-    syncRemoteTrack(event.track, event.status, event.positionMs, event.updatedAt);
+    syncRemoteTrack(toClientTrack(event.track), event.status, event.positionMs, event.updatedAt);
     return;
   }
 
-  // Se o ouvinte não estiver com a mesma música do host, sincroniza a música
   if (event.track && (!currentTrack || currentTrack.id !== event.track.id)) {
-    syncRemoteTrack(event.track, event.status, event.positionMs, event.updatedAt);
+    syncRemoteTrack(toClientTrack(event.track), event.status, event.positionMs, event.updatedAt);
     return;
   }
 
@@ -357,10 +538,13 @@ function handleRemoteSync(event: JamSyncEvent) {
   }, 600);
 }
 
-// Observador do player local: se este usuário for o Host, propaga alterações para os convidados
+// Observador do player local: se este usuário puder sincronizar com a Jam, propaga as alterações
 usePlayerStore.subscribe((state, prev) => {
-  const { code, isHost } = useJamStore.getState();
-  if (!code || !isHost || isRemoteSyncing) return;
+  const { code, isHost, allowGuestControl } = useJamStore.getState();
+  if (!code || isRemoteSyncing) return;
+
+  // Se for ouvinte e convidados não tiverem permissão de controle, não envia
+  if (!isHost && !allowGuestControl) return;
 
   // Faixa mudou
   if (state.currentTrack && state.currentTrack.id !== prev.currentTrack?.id) {
