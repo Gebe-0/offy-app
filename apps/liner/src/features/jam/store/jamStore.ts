@@ -55,6 +55,7 @@ export const useJamStore = create<JamState>((set, get) => ({
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({}),
       });
 
       if (!res.ok) {
@@ -119,6 +120,7 @@ export const useJamStore = create<JamState>((set, get) => ({
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({}),
       });
 
       if (!res.ok) {
@@ -181,6 +183,7 @@ export const useJamStore = create<JamState>((set, get) => ({
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
+            body: JSON.stringify({}),
           });
         }
       } catch {

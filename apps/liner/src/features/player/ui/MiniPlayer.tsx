@@ -15,8 +15,7 @@ import {
   RepeatOne,
   Shuffle,
 } from "@solar-icons/react";
-import { HeartFill, HeartLine, GroupLine } from "@mingcute/react";
-import { useJamStore } from "@/features/jam";
+import { HeartFill, HeartLine } from "@mingcute/react";
 
 import { PlayerMorphIcon, ICON_PLAY, ICON_PAUSE } from "./morphPlayerIcons";
 
@@ -319,8 +318,6 @@ function MiniPlayer({
   const isLocal = isLocalTrackId(currentTrack?.id);
   const isLiked = useIsTrackLiked(currentTrack?.id);
   const eqActive = isEqActive(player.isEqEnabled, player.eqGains);
-  const jamCode = useJamStore((s) => s.code);
-  const openJamModal = useJamStore((s) => s.openModal);
   const likeMutation = useLikeTrack();
   const unlikeMutation = useUnlikeTrack();
   const togglingRef = useRef(false);
@@ -1031,29 +1028,6 @@ function MiniPlayer({
                 }}
               >
                 <MaximizeSquare3 size={18} weight="Outline" />
-              </button>
-              <button
-                type="button"
-                aria-label={jamCode ? `Jam ativa (${jamCode})` : "Ouvir Juntos (Jam)"}
-                title={jamCode ? `Jam ativa: ${jamCode} (Clique para gerenciar)` : "Ouvir Juntos (Jam)"}
-                className={`${iconButtonClass} ${
-                  jamCode ? "!bg-emerald-500/20 !text-emerald-400 !border-emerald-500/40" : ""
-                }`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setSpeedOpen(false);
-                  setEqOpen(false);
-                  setVolumeOpen(false);
-                  openJamModal();
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <div className="relative flex items-center justify-center">
-                  <GroupLine size={18} />
-                  {jamCode && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  )}
-                </div>
               </button>
               <span
                 className="mx-[3px] h-[16px] w-px bg-border-toolbox-divider"

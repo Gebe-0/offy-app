@@ -1,9 +1,9 @@
 import { useState } from "react";
 import Dialog from "@/shared/ui/Dialog";
 import { DialogActions, DialogButton, DialogHeader } from "@/shared/ui";
-import TextInput from "@/shared/ui/TextInput";
 import { showToast } from "@/shared/ui";
 import { useJamStore } from "../store/jamStore";
+import { CodeInput } from "./CodeInput";
 
 export default function JamModal() {
   const {
@@ -131,20 +131,21 @@ export default function JamModal() {
                 </DialogActions>
               </div>
             ) : (
-              <form onSubmit={handleJoinSubmit} className="flex flex-col gap-[16px] py-[6px]">
-                <div className="flex flex-col gap-[6px]">
-                  <label className="text-[12px] uppercase font-semibold tracking-wider text-text-secondary">
-                    Código da Jam (6 dígitos)
-                  </label>
-                  <TextInput
+              <form onSubmit={handleJoinSubmit} className="flex flex-col gap-[20px] py-[10px]">
+                <div className="flex flex-col items-center gap-[8px]">
+                  <span className="text-[12px] uppercase font-semibold tracking-wider text-text-secondary">
+                    Digite o código da Jam
+                  </span>
+                  <CodeInput
                     value={inputCode}
-                    onChange={(e) => setInputCode(e.target.value.toUpperCase().slice(0, 6))}
-                    placeholder="Ex: A7X9K2"
-                    autoFocus
-                    className="font-mono text-[16px] tracking-[0.2em] uppercase text-center"
+                    onChange={(val) => setInputCode(val)}
+                    disabled={isConnecting}
                   />
+                  <span className="text-[12px] text-text-secondary/70">
+                    Insira as 6 letras ou números compartilhados pelo seu amigo
+                  </span>
                 </div>
-                <DialogActions className="mt-[4px]">
+                <DialogActions className="mt-[6px]">
                   <DialogButton type="button" onClick={closeModal}>
                     Cancelar
                   </DialogButton>
