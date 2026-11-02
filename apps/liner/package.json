@@ -1,6 +1,6 @@
 {
   "name": "@offy/client",
-  "version": "0.1.0",
+  "version": "1.0.2",
   "type": "module",
   "private": true,
   "description": "OFFY Music Player",

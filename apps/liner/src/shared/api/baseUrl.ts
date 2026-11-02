@@ -1,4 +1,4 @@
-export const DEFAULT_PRIMARY_API = "http://127.0.0.1:8787";
+export const DEFAULT_PRIMARY_API = "https://137.131.148.92.sslip.io";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

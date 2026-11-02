@@ -6,7 +6,7 @@
 
 ### Reprodutor musical desktop ultrarrápido, livre de anúncios e com sincronização coletiva.
 
-[![Versão](https://img.shields.io/badge/Versão-0.1.0-E11D48?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
+[![Versão](https://img.shields.io/badge/Versão-1.0.2-E11D48?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
 [![Documentação](https://img.shields.io/badge/Documentação-DOCUMENTATION.md-3B82F6?style=for-the-badge)](./DOCUMENTATION.md)
 [![Suporte Discord](https://img.shields.io/badge/Suporte%20Discord-@arlw__-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com)
 [![Editor](https://img.shields.io/badge/Editor-GEBE--OFFY-10B981?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
@@ -33,7 +33,7 @@
 ```
 offy/
 ├── apps/
-│   ├── api/            # Fastify + PostgreSQL (Neon) — auth, catálogo, biblioteca, social, letras, jam
+│   ├── api/            # Fastify + PostgreSQL (Oracle Cloud Dedicated VM) — auth, catálogo, biblioteca, social, letras, jam
 │   └── client/         # Cliente desktop OFFY (Electron + React + TypeScript + Tailwind)
 ├── packages/
 │   ├── core/           # InnerTube (busca, browse, streaming de alta qualidade), letras

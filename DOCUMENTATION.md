@@ -39,7 +39,7 @@ O **OFFY** é um ecossistema musical de alto desempenho desenvolvido para propor
 ```
 offy/
 ├── apps/
-│   ├── api/            # Servidor Fastify + PostgreSQL (Neon) — Auth, Catálogo, Letras, Jam, Social
+│   ├── api/            # Servidor Fastify + PostgreSQL (Oracle Cloud VM) — Auth, Catálogo, Letras, Jam, Social
 │   └── client/         # Cliente Desktop OFFY (Electron + React + Vite + Tailwind CSS)
 ├── packages/
 │   ├── core/           # Módulos centrais de resolução InnerTube, busca e streaming
@@ -55,7 +55,7 @@ offy/
 flowchart TD
     Client["OFFY Desktop (Electron + React)"]
     API["OFFY Backend API (Fastify)"]
-    DB[("PostgreSQL (Neon DB)")]
+    DB[("PostgreSQL 16 (Oracle Cloud)")]
     YouTube["InnerTube / YouTube CDN"]
     Discord["Discord Desktop App (IPC)"]
     Lyrics["Provedores de Letras (bLyrics, Unison, LRCLIB)"]
