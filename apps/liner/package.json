@@ -35,7 +35,13 @@
     "copyright": "Copyright © 2026 GEBE - OFFY",
     "executableName": "offy",
     "artifactName": "OFFY-${version}-${arch}.${ext}",
-    "publish": [],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Gebe-0",
+        "repo": "offy-app"
+      }
+    ],
     "directories": {
       "output": "release"
     },

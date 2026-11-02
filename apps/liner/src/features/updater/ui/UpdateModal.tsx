@@ -13,10 +13,10 @@ export default function UpdateModal() {
 
   if (!updateInfo) return null;
 
-  const _releaseTag = updateInfo.version.startsWith("v")
+  const releaseTag = updateInfo.version.startsWith("v")
     ? updateInfo.version
     : `v${updateInfo.version}`;
-  const changelogUrl = "#";
+  const changelogUrl = `https://github.com/Gebe-0/offy-app/releases/tag/${releaseTag}`;
 
   return (
     <Dialog

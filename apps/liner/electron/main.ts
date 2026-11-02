@@ -1861,6 +1861,15 @@ if (!gotTheLock) {
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowPrerelease = false;
     autoUpdater.allowDowngrade = false;
+    try {
+      autoUpdater.setFeedURL({
+        provider: "github",
+        owner: "Gebe-0",
+        repo: "offy-app",
+      });
+    } catch {
+      // Ignored if custom feed URL fails
+    }
 
     autoUpdater.on("update-available", (info) => {
       mainWindow?.webContents.send("updater:update-available", {
@@ -1905,30 +1914,85 @@ if (!gotTheLock) {
     });
 
     ipcMain.handle("updater:check-for-updates", async () => {
-      if (!app.isPackaged) {
-        return { available: false, error: "Updater is disabled in dev mode" };
+      // 1. Tentar autoUpdater oficial se o app estiver empacotado e configurado
+      if (app.isPackaged) {
+        try {
+          const result = await autoUpdater.checkForUpdates();
+          if (result?.updateInfo?.version) {
+            return {
+              available: result.updateInfo.version !== app.getVersion(),
+              version: result.updateInfo.version,
+              releaseNotes:
+                typeof result.updateInfo.releaseNotes === "string"
+                  ? result.updateInfo.releaseNotes
+                  : undefined,
+            };
+          }
+        } catch (err: any) {
+          console.warn(
+            "\x1b[33m updater \x1b[0m autoUpdater check failed, fallback to GitHub API:",
+            err?.message || err,
+          );
+        }
       }
-      const updateConfig = path.join(process.resourcesPath, "app-update.yml");
-      if (!fs.existsSync(updateConfig)) {
-        return { available: false };
-      }
+
+      // 2. Fallback direto para a API pública do GitHub (Gebe-0/offy-app)
       try {
-        const result = await autoUpdater.checkForUpdates();
+        const res = await fetch(
+          "https://api.github.com/repos/Gebe-0/offy-app/releases/latest",
+          {
+            headers: {
+              "User-Agent": "OFFY-Desktop-Client",
+              Accept: "application/vnd.github.v3+json",
+            },
+          },
+        );
+
+        if (res.status === 404) {
+          return { available: false };
+        }
+
+        if (!res.ok) {
+          return { available: false, error: `GitHub API error: ${res.status}` };
+        }
+
+        const data = (await res.json()) as {
+          tag_name?: string;
+          body?: string;
+          html_url?: string;
+        };
+
+        const rawTag = data?.tag_name || "";
+        const cleanLatest = rawTag.replace(/^v/, "").trim();
+        const currentVersion = app.getVersion().replace(/^v/, "").trim();
+
+        if (!cleanLatest) {
+          return { available: false };
+        }
+
+        const isNewer = (latest: string, current: string) => {
+          const p1 = latest.split(".").map(Number);
+          const p2 = current.split(".").map(Number);
+          for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+            const a = p1[i] || 0;
+            const b = p2[i] || 0;
+            if (a > b) return true;
+            if (a < b) return false;
+          }
+          return false;
+        };
+
+        const available = isNewer(cleanLatest, currentVersion);
+
         return {
-          available: Boolean(
-            result?.updateInfo?.version &&
-            result.updateInfo.version !== app.getVersion(),
-          ),
-          version: result?.updateInfo?.version,
-          releaseNotes:
-            typeof result?.updateInfo?.releaseNotes === "string"
-              ? result.updateInfo.releaseNotes
-              : undefined,
+          available,
+          version: cleanLatest,
+          releaseNotes: data?.body || undefined,
         };
       } catch (err: any) {
         return {
           available: false,
-          error: err?.message || "Failed to check for updates",
+          error: err?.message || "Failed to check for updates on GitHub",
         };
       }
     });
@@ -1998,17 +2062,14 @@ if (!gotTheLock) {
 
     // automatic update check after window initialization (packaged app only)
     if (app.isPackaged) {
-      const updateConfig = path.join(process.resourcesPath, "app-update.yml");
-      if (fs.existsSync(updateConfig)) {
-        setTimeout(() => {
-          autoUpdater.checkForUpdates().catch((err) => {
-            console.error(
-              "\x1b[31m updater \x1b[0m background check error:",
-              err?.message || err,
-            );
-          });
-        }, 4000);
-      }
+      setTimeout(() => {
+        autoUpdater.checkForUpdates().catch((err) => {
+          console.error(
+            "\x1b[31m updater \x1b[0m background check error:",
+            err?.message || err,
+          );
+        });
+      }, 4000);
 
       // check for OTA bundles every 15 minutes silently in background
       setInterval(
