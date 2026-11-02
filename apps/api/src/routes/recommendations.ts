@@ -13,7 +13,7 @@ export async function registerRecommendationRoutes(app: FastifyInstance): Promis
     try {
       const userId = requireUserId(request);
 
-      let rows = await sql`
+      const rows = await sql`
         select t.*, count(*) as plays, max(e.created_at) as last_at
         from playback_events e join tracks t on t.id = e.track_id
         where e.user_id = ${userId}
@@ -23,12 +23,7 @@ export async function registerRecommendationRoutes(app: FastifyInstance): Promis
       `;
 
       if (rows.length === 0) {
-        rows = await sql`
-          select t.*, 1 as plays, now() as last_at
-          from tracks t
-          order by t.refreshed_at desc
-          limit 60
-        `;
+        return reply.send({ items: [], generatedAt: new Date().toISOString() });
       }
 
       const byArtist = new Map<string, { tracks: any[]; plays: number }>();
