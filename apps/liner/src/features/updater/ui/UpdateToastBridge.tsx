@@ -67,7 +67,13 @@ export default function UpdateToastBridge() {
     }
 
     if (status === "error" && error) {
-      if (error.includes("app-update.yml") || error.includes("ENOENT")) {
+      if (
+        error.includes("app-update.yml") ||
+        error.includes("latest.yml") ||
+        error.includes("404") ||
+        error.includes("HttpError") ||
+        error.includes("ENOENT")
+      ) {
         reset();
         return;
       }

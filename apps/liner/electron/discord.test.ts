@@ -32,6 +32,7 @@ vi.mock("@xhayper/discord-rpc", () => {
 
 import {
   DiscordRpcManager,
+  OFFY_LOGO_DISCORD_URL,
   toDiscordImageUrl,
   type DiscordRpcStatePayload,
 } from "./discord";
@@ -140,7 +141,7 @@ describe("DiscordRpcManager", () => {
     manager.updateState(playing("a", "blob:file:///cover"));
     await vi.advanceTimersByTimeAsync(5_000);
     const activity = mocks.setActivity.mock.calls[0][0];
-    expect(activity.largeImageKey).toBeUndefined();
+    expect(activity.largeImageKey).toBe(OFFY_LOGO_DISCORD_URL);
     expect(activity.smallImageKey).toBe(
       "https://lh3.googleusercontent.com/a.jpg",
     );

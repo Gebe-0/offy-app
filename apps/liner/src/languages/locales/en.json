@@ -212,6 +212,9 @@
     "popularPlaylists": "Popular Playlists",
     "dailyMixes": "Your Mixes",
     "dailyMixesSubtitle": "Fresh playlists curated around your favorite artists and genres",
+    "welcome_title": "Your music starts here",
+    "welcome_desc": "Search and play your favorite artists. As you listen, your personalized daily mixes and history will appear here.",
+    "explore_music": "Search music",
     "load_failed": "Couldn't load your home feed"
   },
   "library": {

@@ -214,7 +214,10 @@
     "popularArtists": "Artistas em alta",
     "popularPlaylists": "Playlists populares",
     "dailyMixes": "Mixes diários",
-    "dailyMixesSubtitle": "Playlists novas e atualizadas em torno dos seus artistas e gêneros favoritos"
+    "dailyMixesSubtitle": "Playlists novas e atualizadas em torno dos seus artistas e gêneros favoritos",
+    "welcome_title": "Sua música começa aqui",
+    "welcome_desc": "Busque e reproduza seus artistas favoritos. Conforme você ouve, seus mixes diários e histórico personalizado aparecerão aqui.",
+    "explore_music": "Buscar músicas"
   },
   "library": {
     "title": "Biblioteca",

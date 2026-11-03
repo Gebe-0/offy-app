@@ -37,6 +37,9 @@ export interface DiscordRpcStatePayload {
   artistImageUrl?: string;
 }
 
+export const OFFY_LOGO_DISCORD_URL =
+  "https://raw.githubusercontent.com/Gebe-0/offy-app/main/apps/liner/public/icon.png";
+
 export const LINER_DISCORD_APPLICATION_ID = "1561339119617974362";
 
 function builtInApplicationId(): string {
@@ -395,12 +398,15 @@ export class DiscordRpcManager {
         activity.endTimestamp = new Date(now - currentPos + dur);
       }
 
-      // Large artwork (Album/Track cover)
+      // Large artwork (Album/Track cover or OFFY Logo Fallback)
       const coverImage = toDiscordImageUrl(track.coverUrl);
       if (this.settings.showArtwork && coverImage) {
         activity.largeImageKey = coverImage;
         activity.largeImageText =
           sanitizeText(track.album || track.title) || "OFFY";
+      } else {
+        activity.largeImageKey = OFFY_LOGO_DISCORD_URL;
+        activity.largeImageText = "OFFY";
       }
 
       // Small artwork (Artist photo badge)

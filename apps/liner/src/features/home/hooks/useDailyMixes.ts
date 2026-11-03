@@ -121,17 +121,22 @@ export function useDailyMixes() {
   const owner = useSessionOwner();
   const { data, isLoading } = useCachedResource(
     dailyMixesCacheKey(owner),
-    () =>
-      loadWithRetry(
+    () => {
+      if (!owner) return Promise.resolve(EMPTY_MIXES);
+      return loadWithRetry(
         () => api.getDailyMixes(),
         () => true,
-      ).then((res) => toDailyMixes(res.items)),
+      ).then((res) => toDailyMixes(res.items));
+    },
     DAILY_MIXES_POLICY,
   );
 
   useEffect(() => {
-    if (data) primeMixCollections(data);
-  }, [data]);
+    if (data && owner) primeMixCollections(data);
+  }, [data, owner]);
 
-  return { data: data ?? EMPTY_MIXES, isLoading };
+  return {
+    data: owner ? (data ?? EMPTY_MIXES) : EMPTY_MIXES,
+    isLoading: owner ? isLoading : false,
+  };
 }

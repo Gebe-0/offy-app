@@ -40,7 +40,7 @@ export async function registerRecommendationRoutes(app: FastifyInstance): Promis
       const day = new Date().toISOString().slice(0, 10);
 
       const items: DailyMixItem[] = ranked.map(([artist, bucket], index) => ({
-        id: `${day}-${index + 1}`,
+        id: `mix-${day}-${index + 1}`,
         title: `Mix ${index + 1}`,
         description: `Baseado em ${artist}`,
         clusterArtists: [artist],

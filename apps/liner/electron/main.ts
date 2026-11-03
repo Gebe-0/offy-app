@@ -1903,10 +1903,13 @@ if (!gotTheLock) {
       const msg = err?.message || "";
       if (
         msg.includes("app-update.yml") ||
+        msg.includes("latest.yml") ||
+        msg.includes("404") ||
+        msg.includes("HttpError") ||
         (err as any)?.code === "ENOENT" ||
         msg.includes("ENOENT")
       ) {
-        return; // Silently ignore missing update configuration
+        return; // Silently ignore missing update configuration / 404s; GitHub API check handles it
       }
       mainWindow?.webContents.send("updater:error", {
         message: msg || "Update check failed",
@@ -2005,10 +2008,14 @@ if (!gotTheLock) {
         await autoUpdater.downloadUpdate();
         return { success: true };
       } catch (err: any) {
-        return {
-          success: false,
-          error: err?.message || "Failed to download update",
-        };
+        console.warn(
+          "\x1b[33m updater \x1b[0m autoUpdater.downloadUpdate failed, opening release page:",
+          err?.message || err,
+        );
+        void shell.openExternal(
+          "https://github.com/Gebe-0/offy-app/releases/latest",
+        );
+        return { success: true };
       }
     });
 
