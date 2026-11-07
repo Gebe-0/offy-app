@@ -10,7 +10,6 @@ const AUTH_CHANGED_EVENT = "spotify-auth:changed";
 
 let cachedAccount: SpotifyAccount | null | undefined;
 let isInitialized = false;
-let cleanupConnectedListener: (() => void) | null = null;
 
 function notifyAuthChanged(): void {
   if (typeof window !== "undefined") {
@@ -26,16 +25,6 @@ export function onSpotifyAuthChanged(listener: () => void): () => void {
 
 export async function initSpotifyAuth(): Promise<SpotifyAccount | null> {
   if (typeof window === "undefined") return null;
-
-  if (!cleanupConnectedListener && window.linerElectron?.spotifyAuth?.onConnected) {
-    cleanupConnectedListener = window.linerElectron.spotifyAuth.onConnected((session) => {
-      if (session?.account) {
-        cachedAccount = session.account;
-        isInitialized = true;
-        notifyAuthChanged();
-      }
-    });
-  }
 
   try {
     const session = await window.linerElectron?.spotifyAuth?.getSession();
@@ -61,48 +50,6 @@ export function getCachedSpotifyAccount(): SpotifyAccount | null {
 
 export function isSpotifySignedIn(): boolean {
   return Boolean(getCachedSpotifyAccount());
-}
-
-export async function openSpotifyBrowserLogin(): Promise<{
-  success: boolean;
-  port?: number;
-  error?: string;
-}> {
-  if (typeof window === "undefined" || !window.linerElectron?.spotifyAuth) {
-    return { success: false, error: "Electron API not available" };
-  }
-  return window.linerElectron.spotifyAuth.openBrowserLogin();
-}
-
-export async function cancelSpotifyBrowserLogin(): Promise<boolean> {
-  if (typeof window === "undefined" || !window.linerElectron?.spotifyAuth) {
-    return false;
-  }
-  return window.linerElectron.spotifyAuth.cancelBrowserLogin();
-}
-
-export async function signInWithSpotifyCookie(cookie: string): Promise<{
-  success: boolean;
-  account?: SpotifyAccount;
-  error?: string;
-}> {
-  if (typeof window === "undefined" || !window.linerElectron?.spotifyAuth) {
-    return { success: false, error: "Electron API not available" };
-  }
-
-  try {
-    const result = await window.linerElectron.spotifyAuth.loginWithCookie(cookie);
-    if (result.success && result.session?.account) {
-      cachedAccount = result.session.account;
-      isInitialized = true;
-      notifyAuthChanged();
-      return { success: true, account: result.session.account };
-    }
-    return { success: false, error: result.error || "Falha na autenticação" };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Sign-in failed";
-    return { success: false, error: message };
-  }
 }
 
 export async function signInWithSpotify(): Promise<{
