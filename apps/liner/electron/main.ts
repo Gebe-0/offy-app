@@ -66,6 +66,7 @@ import {
   restoreUnderCursor,
 } from "./window-drag.js";
 import {
+  isWindows10Or11,
   isWindows11,
   loadSnapPreviewAddon,
   NativeSnapPreview,

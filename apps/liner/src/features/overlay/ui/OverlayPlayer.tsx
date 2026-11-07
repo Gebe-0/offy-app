@@ -102,6 +102,20 @@ export function OverlayPlayer() {
     window.linerElectron?.sendOverlayAction?.(action);
   }, []);
 
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (
+        (e.target as HTMLElement).closest(
+          "button, [role='button'], [data-no-window-drag]",
+        )
+      ) {
+        return;
+      }
+      sendAction({ type: "focusMainWindow" });
+    },
+    [sendAction],
+  );
+
   const isPlaying = state.status === "playing";
   const rate =
     state.playbackRate && state.playbackRate > 0 ? state.playbackRate : 1;
@@ -279,6 +293,7 @@ export function OverlayPlayer() {
           scale: isVisible ? 1 : 0.92,
         }}
         transition={OVERLAY_CARD_TRANSITION}
+        onDoubleClick={handleDoubleClick}
         className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[10px] bg-[#0d0d10]"
         style={{
           height: "48px",
@@ -303,6 +318,7 @@ export function OverlayPlayer() {
             className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden cursor-default pr-2"
             onMouseEnter={() => setIsInfoHovered(true)}
             onMouseLeave={() => setIsInfoHovered(false)}
+            onDoubleClick={handleDoubleClick}
           >
             <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded-item bg-[#16161a]">
               {state.track?.coverUrl || state.track?.cover ? (
