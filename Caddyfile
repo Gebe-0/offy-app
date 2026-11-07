@@ -6,7 +6,8 @@ http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.ss
 		reverse_proxy api:8080
 	}
 
-	handle /v1/* {
+	@appRoutes path /v1/* /track* /playlist* /album* /artist* /jam*
+	handle @appRoutes {
 		reverse_proxy api:8080 {
 			transport http {
 				read_timeout 120s
@@ -16,7 +17,7 @@ http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.ss
 	}
 
 	handle {
-		respond "OFFY API" 200
+		reverse_proxy api:8080
 	}
 
 	log {

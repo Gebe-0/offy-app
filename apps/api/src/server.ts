@@ -13,6 +13,8 @@ import { registerRecommendationRoutes } from "./routes/recommendations.js";
 import { registerPresenceRoutes } from "./routes/presence.js";
 import { registerJamRoutes } from "./routes/jam.js";
 import { registerDocsRoutes } from "./routes/docs.js";
+import { registerShareRoutes } from "./routes/share.js";
+import { sendError } from "./http.js";
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? "info" },
@@ -60,11 +62,12 @@ await app.register(registerRecommendationRoutes);
 await app.register(registerPresenceRoutes);
 await app.register(registerJamRoutes);
 await app.register(registerDocsRoutes);
+await app.register(registerShareRoutes);
 
 app.setErrorHandler((error, request, reply) => {
   request.log.error({ err: error }, "request failed");
   if (reply.sent) return;
-  reply.status(500).send({ code: "INTERNAL", message: "internal error" });
+  sendError(reply, error);
 });
 
 const shutdown = async (signal: string) => {

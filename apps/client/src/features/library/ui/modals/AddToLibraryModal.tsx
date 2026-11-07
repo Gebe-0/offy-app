@@ -10,6 +10,7 @@ import CoverImage from "@/features/covers/ui/CoverImage";
 import { useSaveExternalItem } from "../../hooks";
 import { useTranslation } from "@/languages";
 import { useModalStore } from "../../store/modalStore";
+import { getAuthSession } from "@/shared/api";
 
 export default function AddToLibraryModal() {
   const { toast } = useToast();
@@ -23,6 +24,13 @@ export default function AddToLibraryModal() {
 
   const handleAdd = useCallback(() => {
     if (!item) return;
+
+    const session = getAuthSession();
+    if (!session?.accessToken) {
+      toast("Faça login no OFFY para salvar na sua biblioteca", "error");
+      close();
+      return;
+    }
 
     // same shape the library list reads back (useExternalItems): name/title + cover.url
     const cover = item.coverUrl ? { url: item.coverUrl } : undefined;
@@ -50,7 +58,11 @@ export default function AddToLibraryModal() {
           });
           close();
         },
-        onError: () => toast(t("common.failed_to_add_library"), "error"),
+        onError: (err: any) => {
+          const msg = err?.message || t("common.failed_to_add_library");
+          toast(msg, "error");
+          close();
+        },
       },
     );
   }, [item, toast, saveExternal, t, close]);
