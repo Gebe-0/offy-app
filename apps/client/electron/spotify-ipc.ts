@@ -1,3 +1,5 @@
+import http from "node:http";
+import path from "node:path";
 import {
   app,
   BrowserWindow,
@@ -5,10 +7,10 @@ import {
   net,
   safeStorage,
   session,
+  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
 } from "electron";
-import path from "node:path";
 import {
   AuthSessionStore,
   type AuthSessionStoreDeps,
@@ -47,6 +49,29 @@ function fromApp(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
   return isAppUrl(event.senderFrame?.url);
 }
 
+export function extractSpDc(raw: string): string | null {
+  if (!raw) return null;
+  let str = raw.trim();
+  if (
+    (str.startsWith('"') && str.endsWith('"')) ||
+    (str.startsWith("'") && str.endsWith("'"))
+  ) {
+    str = str.slice(1, -1).trim();
+  }
+  const match = str.match(/(?:^|;\s*|\b)sp_dc=([^;\s]+)/);
+  if (match && match[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  if (str.length >= 20 && !str.includes(" ") && !str.includes(";")) {
+    return str;
+  }
+  return null;
+}
+
 export function registerSpotifyIpc(): {
   getValidToken: () => Promise<string | null>;
   getSession: () => StoredSpotifySession | null;
@@ -69,6 +94,125 @@ export function registerSpotifyIpc(): {
   );
 
   let activeLoginWindow: BrowserWindow | null = null;
+  let localAuthServer: http.Server | null = null;
+
+  function stopLocalAuthServer() {
+    if (localAuthServer) {
+      try {
+        localAuthServer.close();
+      } catch {}
+      localAuthServer = null;
+    }
+  }
+
+  async function validateAndStoreSession(spDcValue: string): Promise<{
+    success: boolean;
+    session?: StoredSpotifySession;
+    error?: string;
+  }> {
+    const cleanSpDc = extractSpDc(spDcValue);
+    if (!cleanSpDc) {
+      return {
+        success: false,
+        error: "Cookie sp_dc inválido ou não informado.",
+      };
+    }
+
+    const spSession = session.fromPartition("persist:spotify");
+    try {
+      await spSession.cookies.set({
+        url: "https://open.spotify.com",
+        name: "sp_dc",
+        value: cleanSpDc,
+        domain: ".spotify.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        sameSite: "no_restriction",
+      });
+
+      const bgWin = new BrowserWindow({
+        show: false,
+        width: 300,
+        height: 300,
+        webPreferences: {
+          partition: "persist:spotify",
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      try {
+        await bgWin.loadURL("https://open.spotify.com/");
+        const data = (await bgWin.webContents.executeJavaScript(`
+          (async () => {
+            try {
+              const tokenRes = await fetch("/api/token", { credentials: "include" });
+              if (!tokenRes.ok) return null;
+              const tokenJson = await tokenRes.json();
+              if (!tokenJson || !tokenJson.accessToken || tokenJson.isAnonymous) return null;
+              const meRes = await fetch("https://api.spotify.com/v1/me", {
+                headers: { "Authorization": "Bearer " + tokenJson.accessToken }
+              });
+              if (!meRes.ok) return null;
+              const meJson = await meRes.json();
+              return { token: tokenJson, me: meJson };
+            } catch (e) {
+              return null;
+            }
+          })()
+        `)) as {
+          token: {
+            accessToken: string;
+            accessTokenExpirationTimestampMs?: number;
+          };
+          me: {
+            id: string;
+            display_name?: string;
+            email?: string;
+            images?: Array<{ url: string }>;
+            product?: string;
+          };
+        } | null;
+
+        if (!data || !data.token?.accessToken || !data.me?.id) {
+          return {
+            success: false,
+            error:
+              "Não foi possível validar a conta. Verifique se você está conectado no Spotify e se o cookie sp_dc está correto.",
+          };
+        }
+
+        const finalSession: StoredSpotifySession = {
+          accessToken: data.token.accessToken,
+          spDc: cleanSpDc,
+          refreshToken: cleanSpDc,
+          expiresAt:
+            data.token.accessTokenExpirationTimestampMs ||
+            Date.now() + 3600_000,
+          account: {
+            id: data.me.id,
+            name: data.me.display_name || data.me.id,
+            email: data.me.email,
+            photoUrl: data.me.images?.[0]?.url,
+            product: data.me.product,
+          },
+        };
+
+        store.set(finalSession as unknown as Record<string, unknown>);
+        return { success: true, session: finalSession };
+      } finally {
+        if (!bgWin.isDestroyed()) {
+          bgWin.destroy();
+        }
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || "Erro inesperado ao validar sessão do Spotify.",
+      };
+    }
+  }
 
   async function getValidToken(): Promise<string | null> {
     const raw = store.get();
@@ -80,7 +224,6 @@ export function registerSpotifyIpc(): {
       return String(current.accessToken);
     }
 
-    const spSession = session.fromPartition("persist:spotify");
     try {
       const bgWin = new BrowserWindow({
         show: false,
@@ -130,6 +273,7 @@ export function registerSpotifyIpc(): {
   ipcMain.handle("spotify-auth:logout", async (event) => {
     if (!fromApp(event)) return false;
     store.set(null);
+    stopLocalAuthServer();
     try {
       const spSession = session.fromPartition("persist:spotify");
       await spSession.clearStorageData();
@@ -138,6 +282,111 @@ export function registerSpotifyIpc(): {
     }
     return true;
   });
+
+  ipcMain.handle("spotify-auth:open-browser-login", async (event) => {
+    if (!fromApp(event)) return { success: false, error: "Unauthorized" };
+
+    stopLocalAuthServer();
+
+    localAuthServer = http.createServer((req, res) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Private-Network", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      try {
+        const u = new URL(req.url || "", "http://127.0.0.1:43829");
+        if (u.pathname === "/auth" || u.pathname === "/callback") {
+          const cookie =
+            u.searchParams.get("cookie") || u.searchParams.get("sp_dc") || "";
+          if (cookie) {
+            void (async () => {
+              const resValidation = await validateAndStoreSession(cookie);
+              if (resValidation.success && resValidation.session) {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                  JSON.stringify({
+                    success: true,
+                    user: resValidation.session.account.name,
+                  }),
+                );
+                for (const win of BrowserWindow.getAllWindows()) {
+                  if (!win.isDestroyed()) {
+                    win.webContents.send(
+                      "spotify-auth:connected",
+                      resValidation.session,
+                    );
+                  }
+                }
+                stopLocalAuthServer();
+              } else {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(
+                  JSON.stringify({
+                    success: false,
+                    error: resValidation.error,
+                  }),
+                );
+              }
+            })();
+            return;
+          }
+        }
+      } catch {}
+
+      res.writeHead(404);
+      res.end();
+    });
+
+    localAuthServer.on("error", (err) => {
+      console.warn("[spotify] local loopback server error:", err);
+    });
+
+    try {
+      localAuthServer.listen(43829, "127.0.0.1");
+    } catch (e) {
+      console.warn("[spotify] listen error on 43829:", e);
+    }
+
+    try {
+      await shell.openExternal(
+        "https://accounts.spotify.com/en/login?continue=https%3A%2F%2Fopen.spotify.com%2F",
+      );
+    } catch (err) {
+      console.error("[spotify] failed to open external browser:", err);
+    }
+
+    return { success: true, port: 43829 };
+  });
+
+  ipcMain.handle("spotify-auth:cancel-browser-login", (event) => {
+    if (!fromApp(event)) return false;
+    stopLocalAuthServer();
+    return true;
+  });
+
+  ipcMain.handle(
+    "spotify-auth:login-with-cookie",
+    async (event, { cookie }: { cookie: string }) => {
+      if (!fromApp(event)) return { success: false, error: "Unauthorized" };
+      const res = await validateAndStoreSession(cookie);
+      if (res.success && res.session) {
+        stopLocalAuthServer();
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send("spotify-auth:connected", res.session);
+          }
+        }
+      }
+      return res;
+    },
+  );
 
   ipcMain.handle("spotify-auth:login", async (event) => {
     if (!fromApp(event)) return { success: false, error: "Unauthorized" };

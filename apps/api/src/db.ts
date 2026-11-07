@@ -6,7 +6,7 @@ import { env } from "./env.js";
  * sobrevivem a ele. `prepare: false` é obrigatório nessa URL.
  */
 export const sql = postgres(env.databaseUrl, {
-  max: 5,
+  max: Number(process.env.DB_MAX_CONNECTIONS ?? 30),
   idle_timeout: 20,
   connect_timeout: 10,
   prepare: false,

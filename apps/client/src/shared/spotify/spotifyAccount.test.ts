@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseSpotifyUrl } from "@/features/library/services/import/sources/spotify/spotifyUrl";
 import { isSpotifySignedIn } from "./spotifyAccount";
+import { extractSpDc } from "../../../electron/spotify-ipc";
 
 describe("Spotify Integration", () => {
   it("parses liked songs collection url correctly", () => {
@@ -27,5 +28,19 @@ describe("Spotify Integration", () => {
 
   it("checks signed in state when empty", () => {
     expect(isSpotifySignedIn()).toBe(false);
+  });
+
+  it("extracts sp_dc correctly from raw and cookie headers", () => {
+    expect(extractSpDc("AQD_sample_cookie_value_1234567890abcdef")).toBe(
+      "AQD_sample_cookie_value_1234567890abcdef",
+    );
+    expect(
+      extractSpDc(
+        "sp_m=br; sp_dc=AQD_sample_cookie_value_1234567890abcdef; sp_landing=...",
+      ),
+    ).toBe("AQD_sample_cookie_value_1234567890abcdef");
+    expect(
+      extractSpDc('"sp_dc=AQD_sample_cookie_value_1234567890abcdef"'),
+    ).toBe("AQD_sample_cookie_value_1234567890abcdef");
   });
 });

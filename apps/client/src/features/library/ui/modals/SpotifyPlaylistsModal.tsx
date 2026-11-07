@@ -16,7 +16,7 @@ import {
   fetchUserSpotifyPlaylists,
   type SpotifyUserPlaylist,
 } from "@/shared/spotify";
-import { useSpotifyAccount } from "@/features/spotify-auth";
+import { SpotifyLoginModal, useSpotifyAccount } from "@/features/spotify-auth";
 
 interface SpotifyPlaylistsModalProps {
   open: boolean;
@@ -30,12 +30,13 @@ export default function SpotifyPlaylistsModal({
   onSelect,
 }: SpotifyPlaylistsModalProps) {
   const { t } = useTranslation();
-  const { signedIn, signIn, loading: authLoading } = useSpotifyAccount();
+  const { signedIn, loading: authLoading } = useSpotifyAccount();
 
   const [playlists, setPlaylists] = useState<SpotifyUserPlaylist[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [importingUrl, setImportingUrl] = useState<string | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const loadPlaylists = useCallback(async () => {
     if (!signedIn) return;
@@ -72,6 +73,7 @@ export default function SpotifyPlaylistsModal({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)} maxWidth={440}>
       <div className="flex flex-col gap-[14px] px-[20px] pb-[20px]">
         <DialogHeader
@@ -104,7 +106,7 @@ export default function SpotifyPlaylistsModal({
             <button
               type="button"
               disabled={authLoading}
-              onClick={() => void signIn()}
+              onClick={() => setLoginModalOpen(true)}
               className="mt-[6px] flex items-center justify-center gap-[8px] px-[20px] py-[8px] rounded-item bg-text-primary/85 text-bg-primary hover:bg-text-primary font-medium text-[13px] transition-colors cursor-pointer border-none"
             >
               <SpotifyFill size={18} />
@@ -218,5 +220,10 @@ export default function SpotifyPlaylistsModal({
         )}
       </div>
     </Dialog>
+    <SpotifyLoginModal
+      open={loginModalOpen}
+      onClose={() => setLoginModalOpen(false)}
+    />
+  </>
   );
 }
