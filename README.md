@@ -115,7 +115,7 @@ CORS_ORIGIN=*
 ### Configuração do Cliente (.env):
 
 ```env
-VITE_API_URL=https://offy-api-fp82.onrender.com
+VITE_API_URL=https://api.cloudfy.shop
 ```
 
 ---

@@ -92,12 +92,23 @@ export async function registerLibraryRoutes(app: FastifyInstance): Promise<void>
         where user_id = ${userId} and kind = ${type}
         order by saved_at desc
       `;
+      const singularKind =
+        type === "albums" ? "album" : type === "artists" ? "artist" : "playlist";
       return reply.send({
-        items: rows.map((row: any) => ({
-          ...(row.snapshot ?? {}),
-          id: String(row.item_id),
-          savedAt: iso(row.saved_at),
-        })),
+        items: rows.map((row: any) => {
+          const snap = (row.snapshot ?? {}) as Record<string, unknown>;
+          const entity = {
+            ...snap,
+            id: String(row.item_id),
+            name: (snap.name ?? snap.title ?? String(row.item_id)) as string,
+            title: (snap.title ?? snap.name ?? String(row.item_id)) as string,
+          };
+          return {
+            savedAt: iso(row.saved_at),
+            [singularKind]: entity,
+            ...entity,
+          };
+        }),
       });
     } catch (error) {
       return sendError(reply, error);

@@ -101,7 +101,7 @@ describe("useSongMenuItems", () => {
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      "https://offy.app/track?id=track-123",
+      "https://api.cloudfy.shop/track?id=track-123",
     );
     expect(showToast).toHaveBeenCalledWith("Link copied", "checkmark", {
       description: "Tarde o temprano — Nsqk",
@@ -129,7 +129,7 @@ describe("useSongMenuItems", () => {
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      "https://offy.app/track?id=track-456",
+      "https://api.cloudfy.shop/track?id=track-456",
     );
   });
 
@@ -153,7 +153,7 @@ describe("useSongMenuItems", () => {
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      "https://offy.app/album?id=album-789",
+      "https://api.cloudfy.shop/album?id=album-789",
     );
   });
 

@@ -168,7 +168,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         ok: true,
         room: sanitizeRoom(room),
         jamUrl: `offy://jam?id=${code}`,
-        shareUrl: `https://offy-api-fp82.onrender.com/jam/${code}`,
+        shareUrl: `https://api.cloudfy.shop/jam/${code}`,
       });
     } catch (error) {
       return sendError(reply, error);
@@ -221,7 +221,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         ok: true,
         room: sanitizeRoom(room),
         jamUrl: `offy://jam?id=${code}`,
-        shareUrl: `https://offy-api-fp82.onrender.com/jam/${code}`,
+        shareUrl: `https://api.cloudfy.shop/jam/${code}`,
       });
     } catch (error) {
       return sendError(reply, error);

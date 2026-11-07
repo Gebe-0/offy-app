@@ -38,7 +38,7 @@ export interface DiscordRpcStatePayload {
 }
 
 export const OFFY_LOGO_DISCORD_URL =
-  "https://raw.githubusercontent.com/Gebe-0/offy-app/main/apps/liner/public/icon.png";
+  "https://raw.githubusercontent.com/Gebe-0/offy-app/main/apps/client/public/icon.png";
 
 export const LINER_DISCORD_APPLICATION_ID = "1561339119617974362";
 

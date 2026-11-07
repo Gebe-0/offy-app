@@ -6,6 +6,6 @@ release/
 *.log
 .pnpm-store/
 .env*
-!apps/liner/.env.example
+!apps/client/.env.example
 !apps/api/.env.example
 *.exe
