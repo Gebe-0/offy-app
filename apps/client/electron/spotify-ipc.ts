@@ -231,7 +231,6 @@ export function registerSpotifyIpc(): {
       }) => {
         if (resolved) return;
         resolved = true;
-        clearInterval(checkTimer);
         activeLoginWindow = null;
         if (!authWindow.isDestroyed()) {
           authWindow.close();
@@ -247,110 +246,132 @@ export function registerSpotifyIpc(): {
 
       let isExtracting = false;
 
-      const attemptExtraction = async () => {
+      const checkAndExtract = async () => {
         if (resolved || isExtracting || authWindow.isDestroyed()) return;
         const currentUrl = authWindow.webContents.getURL();
         if (!currentUrl.includes("open.spotify.com")) return;
+
+        // 1. Verify sp_dc cookie is actually present before attempting extraction
+        const cookies = await spSession.cookies.get({ domain: ".spotify.com" });
+        const spDc = cookies.find((c) => c.name === "sp_dc")?.value;
+        if (!spDc) return;
 
         isExtracting = true;
         try {
           authWindow.setTitle("OFFY - Conectando conta...");
 
-          // 1. Get captured token or probe from page context
+          // Allow React hydration to populate local state and trigger initial API calls
+          await new Promise((r) => setTimeout(r, 1200));
+          if (resolved || authWindow.isDestroyed()) return;
+
+          // Poll briefly for Bearer token captured from Web Player network traffic
           let token = capturedBearerToken;
+          for (let i = 0; i < 6; i++) {
+            if (token) break;
+            await new Promise((r) => setTimeout(r, 500));
+            token = capturedBearerToken;
+          }
 
-          if (!token) {
-            const pageToken = await authWindow.webContents.executeJavaScript(`
-              (async () => {
+          // Read authenticated user state from the page context
+          const pageData = await authWindow.webContents
+            .executeJavaScript(`
+              (() => {
+                let id = null;
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  const match = k.match(/^([a-zA-Z0-9_-]{15,}):/);
+                  if (match && match[1] !== "anonymous") {
+                    id = match[1];
+                    break;
+                  }
+                }
+
+                let displayName = null;
+                let photoUrl = null;
+                const btn = document.querySelector('button[data-testid="user-widget-link"]') ||
+                            document.querySelector('button[aria-label*="perfil" i]') ||
+                            document.querySelector('button[aria-label*="profile" i]');
+                if (btn) {
+                  displayName = btn.getAttribute("aria-label") || btn.innerText || null;
+                  if (displayName) {
+                    displayName = displayName.replace(/perfil de /i, "").replace(/profile of /i, "").replace(/profile/i, "").trim();
+                  }
+                  const img = btn.querySelector("img");
+                  if (img?.src) photoUrl = img.src;
+                }
+
+                let product = "free";
                 try {
-                  const res = await fetch("/get_access_token?reason=transport&productType=web_player", { credentials: "include" });
-                  if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.accessToken && !data.isAnonymous) return data.accessToken;
+                  const init = document.getElementById("initialState");
+                  if (init) {
+                    const parsed = JSON.parse(atob(init.innerText));
+                    if (parsed?.session?.product?.product) {
+                      product = parsed.session.product.product.toLowerCase();
+                    }
                   }
                 } catch {}
-                try {
-                  const res2 = await fetch("/api/token", { credentials: "include" });
-                  if (res2.ok) {
-                    const data2 = await res2.json();
-                    if (data2 && data2.accessToken && !data2.isAnonymous) return data2.accessToken;
-                  }
-                } catch {}
-                return null;
+
+                return { id, displayName, photoUrl, product };
               })()
-            `);
-            if (pageToken) token = pageToken;
+            `)
+            .catch(() => null);
+
+          let userId = pageData?.id || "spotify-user";
+          let userName = pageData?.displayName || "Spotify";
+          let photoUrl = pageData?.photoUrl || undefined;
+          let product = pageData?.product || "free";
+
+          // If token and userId are present, enrich profile with official spclient endpoint
+          if (token && userId && userId !== "spotify-user") {
+            try {
+              const profileRes = await net.fetch(
+                `https://spclient.wg.spotify.com/user-profile-view/v3/profile/${encodeURIComponent(userId)}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "User-Agent": CHROME_USER_AGENT,
+                  },
+                },
+              );
+              if (profileRes.ok) {
+                const profileData = (await profileRes.json()) as any;
+                if (profileData?.name) userName = profileData.name;
+                if (profileData?.image_url) photoUrl = profileData.image_url;
+              }
+            } catch {}
           }
-
-          if (!token) {
-            isExtracting = false;
-            return;
-          }
-
-          // 2. Validate token and fetch user profile
-          const meRes = await net.fetch("https://api.spotify.com/v1/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (!meRes.ok) {
-            isExtracting = false;
-            return;
-          }
-
-          const me = (await meRes.json()) as {
-            id: string;
-            display_name?: string;
-            email?: string;
-            images?: Array<{ url: string }>;
-            product?: string;
-          };
-
-          if (!me || !me.id) {
-            isExtracting = false;
-            return;
-          }
-
-          // 3. Extract sp_dc session cookie
-          const cookies = await spSession.cookies.get({
-            domain: ".spotify.com",
-          });
-          const spDc = cookies.find((c) => c.name === "sp_dc")?.value;
 
           const finalSession: StoredSpotifySession = {
-            accessToken: token,
+            accessToken: token || spDc,
             spDc,
             refreshToken: spDc,
             expiresAt: Date.now() + 3600_000,
             account: {
-              id: me.id,
-              name: me.display_name || me.id,
-              email: me.email,
-              photoUrl: me.images?.[0]?.url,
-              product: me.product,
+              id: userId,
+              name: userName,
+              photoUrl,
+              product,
             },
           };
 
           store.set(finalSession as unknown as Record<string, unknown>);
           finish({ success: true, session: finalSession });
-        } catch {
+        } catch (err) {
+          console.error("[spotify] session extraction failed:", err);
           isExtracting = false;
         }
       };
 
-      const checkTimer = setInterval(() => {
-        void attemptExtraction();
-      }, 700);
-
       authWindow.webContents.on("did-finish-load", () => {
-        void attemptExtraction();
+        void checkAndExtract();
       });
 
       authWindow.webContents.on("did-navigate-in-page", () => {
-        void attemptExtraction();
+        void checkAndExtract();
       });
 
       authWindow.webContents.on("did-navigate", () => {
-        void attemptExtraction();
+        void checkAndExtract();
       });
 
       authWindow.loadURL(
@@ -368,7 +389,10 @@ export function registerSpotifyIpc(): {
       const res = await net.fetch(
         "https://api.spotify.com/v1/me/playlists?limit=50",
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "User-Agent": CHROME_USER_AGENT,
+          },
         },
       );
       if (!res.ok) return { items: [] };
@@ -407,7 +431,12 @@ export function registerSpotifyIpc(): {
         while (true) {
           const res = await net.fetch(
             `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=${limit}&offset=${offset}`,
-            { headers: { Authorization: `Bearer ${token}` } },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "User-Agent": CHROME_USER_AGENT,
+              },
+            },
           );
           if (!res.ok) break;
           const data = (await res.json()) as any;
@@ -452,7 +481,12 @@ export function registerSpotifyIpc(): {
       while (true) {
         const res = await net.fetch(
           `https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "User-Agent": CHROME_USER_AGENT,
+            },
+          },
         );
         if (!res.ok) break;
         const data = (await res.json()) as any;
