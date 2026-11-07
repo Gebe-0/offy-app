@@ -27,12 +27,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
   }, [initialize]);
 
   useEffect(() => {
-    if (
-      status === "anonymous" &&
-      pathname !== "/login" &&
-      pathname !== "/installer" &&
-      pathname !== "/setup"
-    ) {
+    if (status === "anonymous" && pathname !== "/login") {
       navigate("/login", { replace: true });
     }
     if (status === "authenticated" && pathname === "/login") {
@@ -42,10 +37,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
 
   if (
     status === "initializing" ||
-    (status === "anonymous" &&
-      pathname !== "/login" &&
-      pathname !== "/installer" &&
-      pathname !== "/setup") ||
+    (status === "anonymous" && pathname !== "/login") ||
     (status === "authenticated" && pathname === "/login")
   ) {
     return (
@@ -55,10 +47,7 @@ export function AuthLock({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const isFramelessSoloPage =
-    pathname === "/login" || pathname === "/installer" || pathname === "/setup";
-
-  return isFramelessSoloPage ? children : <AppFrame>{children}</AppFrame>;
+  return pathname === "/login" ? children : <AppFrame>{children}</AppFrame>;
 }
 
 export default AuthLock;

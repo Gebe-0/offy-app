@@ -69,11 +69,6 @@ export interface LinerElectronApi {
   toggleMaximize: () => Promise<void>;
   toggleFullScreen: () => Promise<void>;
   close: () => Promise<void>;
-  setSize?: (options: {
-    width: number;
-    height: number;
-    resizable?: boolean;
-  }) => Promise<void>;
   isMaximized: () => Promise<boolean>;
   isFullScreen: () => Promise<boolean>;
   onWindowStateChange: (cb: (state: WindowState) => void) => () => void;
@@ -244,8 +239,6 @@ const api: LinerElectronApi = {
   toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
   toggleFullScreen: () => ipcRenderer.invoke("window:toggle-fullscreen"),
   close: () => ipcRenderer.invoke("window:close"),
-  setSize: (options: { width: number; height: number; resizable?: boolean }) =>
-    ipcRenderer.invoke("window:set-size", options),
   isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
   isFullScreen: () => ipcRenderer.invoke("window:is-fullscreen"),
   onWindowStateChange: (cb) => {

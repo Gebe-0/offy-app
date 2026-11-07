@@ -85,15 +85,8 @@
     },
     "nsis": {
       "artifactName": "OFFY-Setup-${version}.${ext}",
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true,
-      "runAfterFinish": true,
-      "installerSidebar": "build/installerSidebar.bmp",
-      "installerHeader": "build/installerHeader.bmp",
-      "include": "build/installer.nsh"
+      "allowToChangeInstallationDirectory": true,
+      "oneClick": false
     },
     "mac": {
       "icon": "build/icon-mac.png",
