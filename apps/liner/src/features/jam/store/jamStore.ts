@@ -87,18 +87,33 @@ export const useJamStore = create<JamState>((set, get) => ({
       };
 
       playerEngine.setJamBridge({
-        getNextTrack: () => {
-          const q = get().queue;
-          return q.length > 0 ? q[0] : null;
-        },
-        onTrackConsumed: (trackId) => {
-          void get().removeFromQueue(trackId);
-        },
         canControlPlayback: () => {
           const { isHost, allowGuestControl } = get();
           return isHost || allowGuestControl;
         },
         isHost: () => get().isHost,
+        onSkipNext: () => {
+          const { code, isHost, allowGuestControl } = get();
+          if (!code || isHost || !allowGuestControl) return;
+          void getValidAccessToken().then((token) => {
+            if (token) {
+              void sendJamSync(code, token, {
+                action: "SKIP_NEXT",
+              });
+            }
+          });
+        },
+        onSkipPrevious: () => {
+          const { code, isHost, allowGuestControl } = get();
+          if (!code || isHost || !allowGuestControl) return;
+          void getValidAccessToken().then((token) => {
+            if (token) {
+              void sendJamSync(code, token, {
+                action: "SKIP_PREV",
+              });
+            }
+          });
+        },
       });
 
       set({
@@ -192,18 +207,33 @@ export const useJamStore = create<JamState>((set, get) => ({
       );
 
       playerEngine.setJamBridge({
-        getNextTrack: () => {
-          const q = get().queue;
-          return q.length > 0 ? q[0] : null;
-        },
-        onTrackConsumed: (trackId) => {
-          void get().removeFromQueue(trackId);
-        },
         canControlPlayback: () => {
           const { isHost, allowGuestControl } = get();
           return isHost || allowGuestControl;
         },
         isHost: () => get().isHost,
+        onSkipNext: () => {
+          const { code, isHost, allowGuestControl } = get();
+          if (!code || isHost || !allowGuestControl) return;
+          void getValidAccessToken().then((token) => {
+            if (token) {
+              void sendJamSync(code, token, {
+                action: "SKIP_NEXT",
+              });
+            }
+          });
+        },
+        onSkipPrevious: () => {
+          const { code, isHost, allowGuestControl } = get();
+          if (!code || isHost || !allowGuestControl) return;
+          void getValidAccessToken().then((token) => {
+            if (token) {
+              void sendJamSync(code, token, {
+                action: "SKIP_PREV",
+              });
+            }
+          });
+        },
       });
 
       set({
@@ -268,66 +298,12 @@ export const useJamStore = create<JamState>((set, get) => ({
     }
   },
 
-  addToQueue: async (track: Track) => {
-    const { code, isHost, allowGuestControl } = get();
-    if (!code) return;
-    if (!isHost && !allowGuestControl) {
-      showToast.info("Apenas o Host pode adicionar músicas à fila da Jam.");
-      return;
-    }
-
-    try {
-      const token = await getValidAccessToken();
-      if (!token) return;
-
-      const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}/queue`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ track }),
-      });
-
-      if (res.ok) {
-        showToast.checkmark(`Adicionado à fila da Jam: ${track.title}`);
-      }
-    } catch {
-      showToast.error("Erro ao adicionar faixa à fila da Jam.");
-    }
-  },
-
-  removeFromQueue: async (trackId: string) => {
-    const { code, isHost, allowGuestControl } = get();
-    if (!code) return;
-    if (!isHost && !allowGuestControl) {
-      showToast.info("Apenas o Host pode gerenciar a fila da Jam.");
-      return;
-    }
-
-    try {
-      const token = await getValidAccessToken();
-      if (!token) return;
-
-      await fetch(
-        `${getApiBaseUrl()}/v1/jam/${code}/queue/${encodeURIComponent(trackId)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({}),
-        },
-      );
-    } catch {
-      // ignore
-    }
-  },
+  addToQueue: async () => {},
+  removeFromQueue: async () => {},
 
   leaveJam: async () => {
     const currentCode = get().code;
-    playerEngine.setJamBridge(null);
+    playerEngine?.setJamBridge?.(null);
     stopRealtimeSync();
 
     if (currentCode) {
@@ -462,7 +438,7 @@ function startRealtimeSync(code: string, token: string) {
   });
 
   es.addEventListener("jam_closed", () => {
-    playerEngine.setJamBridge(null);
+    playerEngine?.setJamBridge?.(null);
     useJamStore.setState({
       code: null,
       isHost: false,
@@ -560,7 +536,7 @@ async function sendJamSync(
   code: string,
   token: string,
   payload: {
-    action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE";
+    action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE" | "SKIP_NEXT" | "SKIP_PREV";
     track?: Track;
     positionMs?: number;
   },
@@ -580,8 +556,6 @@ async function sendJamSync(
 }
 
 let syncCooldownTimer: ReturnType<typeof setTimeout> | null = null;
-let lastSyncTrackId: string | null = null;
-let lastSyncTrackTime = 0;
 
 function setRemoteSyncingState(active: boolean, cooldownMs: number = 1800) {
   isRemoteSyncing = active;
@@ -602,6 +576,7 @@ function syncRemoteTrack(
   positionMs: number,
   updatedAt: number,
 ) {
+  if (!track || !track.id) return;
   setRemoteSyncingState(true, 2500);
 
   const now = Date.now();
@@ -612,11 +587,8 @@ function syncRemoteTrack(
   const currentStatus = usePlayerStore.getState().status;
   const currentPos = usePlayerStore.getState().positionMs;
 
-  // Se já estamos com essa faixa carregada ou iniciamos o carregamento dela há menos de 3.5s
-  if (
-    currentTrack?.id === track.id ||
-    (lastSyncTrackId === track.id && now - lastSyncTrackTime < 3500)
-  ) {
+  // Se já estamos tocando essa mesma faixa, sincroniza tempo / reprodução
+  if (currentTrack?.id === track.id) {
     if (Math.abs(currentPos - targetPos) > 2500) {
       playerRuntime?.seek(targetPos);
     }
@@ -631,9 +603,6 @@ function syncRemoteTrack(
     }
     return;
   }
-
-  lastSyncTrackId = track.id;
-  lastSyncTrackTime = now;
 
   const clientTrack = toClientTrack(track);
 
@@ -657,6 +626,20 @@ function syncRemoteTrack(
 function handleRemoteSync(event: JamSyncEvent) {
   const myUserId = getAuthSession()?.user.id;
   if (event.senderId && myUserId && event.senderId === myUserId) {
+    return;
+  }
+
+  // Comandos de controle de faixa vindos de convidados autorizados: o Host executa na fila
+  if (event.action === "SKIP_NEXT") {
+    if (useJamStore.getState().isHost) {
+      void playerEngine.skipNext(false);
+    }
+    return;
+  }
+  if (event.action === "SKIP_PREV") {
+    if (useJamStore.getState().isHost) {
+      void playerEngine.skipPrevious();
+    }
     return;
   }
 
@@ -709,7 +692,8 @@ function handleRemoteSync(event: JamSyncEvent) {
 }
 
 // Observador do player local: se este usuário puder sincronizar com a Jam, propaga as alterações
-usePlayerStore.subscribe((state, prev) => {
+if (typeof usePlayerStore?.subscribe === "function") {
+  usePlayerStore.subscribe((state, prev) => {
   const { code, isHost, allowGuestControl } = useJamStore.getState();
   if (!code || isRemoteSyncing) return;
 
@@ -767,6 +751,7 @@ usePlayerStore.subscribe((state, prev) => {
     });
   }
 });
+}
 
 // Re-sincroniza o estado da Jam imediatamente ao retomar o foco da janela
 if (typeof window !== "undefined") {
