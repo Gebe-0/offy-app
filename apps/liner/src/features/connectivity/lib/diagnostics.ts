@@ -5,7 +5,7 @@ import { SHARE_BASE_URL } from "@/shared/utils/share";
 // close an import cycle (api hooks record failures into this feature).
 const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "") ||
-  "https://137.131.148.92.sslip.io";
+  "https://api.cloudfy.shop";
 const COVERS_BASE =
   (import.meta.env.VITE_COVERS_PROXY_URL as string | undefined)?.replace(
     /\/+$/,

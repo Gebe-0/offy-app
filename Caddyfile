@@ -1,4 +1,4 @@
-http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.sslip.io, :80 {
+http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.sslip.io, https://api.cloudfy.shop, https://cloudfy.shop, :80 {
 	encode zstd gzip
 
 	@health path /health

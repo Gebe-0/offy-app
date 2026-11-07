@@ -1,4 +1,4 @@
-export const DEFAULT_PRIMARY_API = "https://137.131.148.92.sslip.io";
+export const DEFAULT_PRIMARY_API = "https://api.cloudfy.shop";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
