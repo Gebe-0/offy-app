@@ -16,6 +16,9 @@
 !/build/icon-mac.svg
 !/build/certs/
 !/build/certs/*
+!/build/installerSidebar.bmp
+!/build/installerHeader.bmp
+!/build/installer.nsh
 
 # testing
 /coverage
