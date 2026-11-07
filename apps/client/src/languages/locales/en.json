@@ -601,6 +601,7 @@
       "overlay": "Overlay",
       "discord": "Discord RPC",
       "youtube": "YouTube",
+      "spotify": "Spotify",
       "privacy": "Privacy"
     },
     "playback": {
@@ -715,6 +716,40 @@
       "sign_in": "Sign in",
       "signed_out_title": "Not signed in",
       "signed_out_description": "Sign in to keep YouTube playback working"
+    },
+    "spotify": {
+      "description": "Connect your Spotify account to sync your playlists, liked songs and import full tracks.",
+      "section_likes": "Liked Songs",
+      "section_library": "Library",
+      "section_import": "Import",
+      "sync_likes": {
+        "title": "Sync Liked Songs",
+        "description": "Creates and syncs your saved songs into a dedicated 'Músicas Curtidas (Spotify)' playlist."
+      },
+      "sync_library": {
+        "title": "Sync library",
+        "description": "Show playlists from your Spotify account in the library alongside OFFY playlists."
+      },
+      "full_import": {
+        "title": "Import full playlists",
+        "description": "Use your Spotify session to load all tracks from long playlists (over 100 tracks) without restrictions."
+      },
+      "sign_out": "Sign out",
+      "sign_in": "Sign in with Spotify",
+      "signed_out_title": "Not signed in",
+      "signed_out_description": "Connect your Spotify account to sync playlists and liked songs",
+      "sync_now": "Sync now",
+      "syncing": "Syncing...",
+      "sync_started": "Liked songs import started!",
+      "sync_failed": "Failed to sync liked songs.",
+      "sign_in_required": "Please connect your Spotify account first.",
+      "my_playlists": "Spotify Playlists",
+      "my_playlists_desc": "Select a playlist to import into OFFY with 1 click.",
+      "connect_account": "Connect your Spotify account",
+      "connect_account_hint": "Sign in to view and import your playlists and liked songs.",
+      "liked_songs": "Liked Songs",
+      "collection": "Collection",
+      "no_playlists": "No playlists found."
     },
     "discord": {
       "description": "Show what you're listening to on Discord with album art, artist badge and progress bar.",

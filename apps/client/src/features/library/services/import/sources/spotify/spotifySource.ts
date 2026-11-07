@@ -14,10 +14,17 @@ import {
   resolveSpotifyUrl,
   type SpotifyEntityType,
 } from "./spotifyUrl";
+import {
+  fetchSpotifyTracksWithAccount,
+  fetchUserSpotifyLikedTracks,
+  isSpotifySignedIn,
+  prefersSpotifyAccountImport,
+} from "@/shared/spotify";
 
 function defaultTitle(entityType: SpotifyEntityType): string {
   if (entityType === "album") return "Imported Spotify album";
   if (entityType === "track") return "Imported Spotify track";
+  if (entityType === "collection") return "Músicas Curtidas (Spotify)";
   return "Imported Spotify playlist";
 }
 
@@ -70,6 +77,57 @@ export async function importSpotify(
 ): Promise<ClientImportedPlaylist> {
   const resolvedUrl = await resolveSpotifyUrl(rawUrl, signal);
   const { type: entityType, id: entityId } = parseSpotifyUrl(resolvedUrl);
+
+  if (entityType === "collection") {
+    const liked = await fetchUserSpotifyLikedTracks();
+    if (liked.tracks.length > 0) {
+      return {
+        source: "spotify",
+        sourceUrl: rawUrl,
+        title: "Músicas Curtidas (Spotify)",
+        description: "Músicas curtidas sincronizadas do seu Spotify",
+        tracks: liked.tracks.map((t) => ({
+          sourceId: t.sourceId,
+          title: t.title,
+          artists: t.artists,
+          album: t.album,
+          durationMs: t.durationMs,
+          coverUrl: t.coverUrl,
+        })),
+      };
+    }
+    throw new Error("Nenhuma música curtida encontrada na sua conta do Spotify.");
+  }
+
+  // If user is logged into Spotify and account import is preferred, try fetching all tracks with their token
+  if (entityType === "playlist" && isSpotifySignedIn() && prefersSpotifyAccountImport()) {
+    try {
+      const accountResult = await fetchSpotifyTracksWithAccount(entityId);
+      if (accountResult.tracks.length > 0) {
+        log(
+          "green",
+          "import",
+          `spotify account import fetched all ${accountResult.tracks.length} tracks`,
+        );
+        return {
+          source: "spotify",
+          sourceUrl: rawUrl,
+          title: defaultTitle(entityType),
+          tracks: accountResult.tracks.map((t) => ({
+            sourceId: t.sourceId,
+            title: t.title,
+            artists: t.artists,
+            album: t.album,
+            durationMs: t.durationMs,
+            coverUrl: t.coverUrl,
+          })),
+        };
+      }
+    } catch (err) {
+      log("yellow", "import", `account playlist fetch failed: ${String(err)}`);
+    }
+  }
+
   const embed = await fetchSpotifyEmbed(
     entityType,
     entityId,

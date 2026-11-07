@@ -1,11 +1,12 @@
 import { rethrowIfAborted } from "@/shared/utils/abort";
 
-export type SpotifyEntityType = "playlist" | "album" | "track";
+export type SpotifyEntityType = "playlist" | "album" | "track" | "collection";
 
 const ENTITY_TYPES: readonly SpotifyEntityType[] = [
   "playlist",
   "album",
   "track",
+  "collection",
 ];
 
 function asEntityType(
@@ -18,9 +19,13 @@ export function parseSpotifyUrl(rawUrl: string): {
   type: SpotifyEntityType;
   id: string;
 } {
+  const trimmed = rawUrl.trim();
+  if (trimmed === "spotify:liked" || trimmed.includes("/collection/tracks")) {
+    return { type: "collection", id: "tracks" };
+  }
   let url: URL;
   try {
-    url = new URL(rawUrl.trim());
+    url = new URL(trimmed);
   } catch {
     throw new Error("Spotify playlist URL is invalid.");
   }

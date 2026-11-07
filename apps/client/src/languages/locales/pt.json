@@ -556,6 +556,8 @@
       "shortcuts": "Atalhos",
       "overlay": "Overlay",
       "discord": "Discord RPC",
+      "youtube": "YouTube",
+      "spotify": "Spotify",
       "privacy": "Privacidade"
     },
     "playback": {
@@ -646,6 +648,61 @@
         "title": "Sempre no topo",
         "description": "Mantém o overlay flutuante acima das outras janelas."
       }
+    },
+    "youtube": {
+      "description": "Conecte sua conta do YouTube para evitar erros de reprodução.",
+      "section_account": "Conta",
+      "section_playback": "Reprodução",
+      "account_playback": {
+        "title": "Tocar através da sua conta",
+        "description": "Requisita o áudio do YouTube com sua conta conectada para que as transmissões não sejam bloqueadas."
+      },
+      "prompt_sign_in": {
+        "title": "Pedir para entrar",
+        "description": "Exibe o cartão de login quando o YouTube bloquear a reprodução em vez de pular a música."
+      },
+      "sync_library": {
+        "title": "Sincronizar biblioteca",
+        "description": "Exibe as playlists da sua conta do YouTube na biblioteca ao lado das playlists do OFFY."
+      },
+      "sign_out": "Desconectar",
+      "sign_in": "Entrar",
+      "signed_out_title": "Não conectado",
+      "signed_out_description": "Conecte sua conta para manter a reprodução do YouTube funcionando"
+    },
+    "spotify": {
+      "description": "Conecte sua conta do Spotify para sincronizar playlists, músicas curtidas e importar faixas completas.",
+      "section_likes": "Músicas Curtidas",
+      "section_library": "Biblioteca",
+      "section_import": "Importação",
+      "sync_likes": {
+        "title": "Sincronizar Músicas Curtidas",
+        "description": "Cria e sincroniza suas músicas curtidas em uma playlist dedicada 'Músicas Curtidas (Spotify)'."
+      },
+      "sync_library": {
+        "title": "Sincronizar biblioteca",
+        "description": "Exibe as playlists da sua conta do Spotify na biblioteca ao lado das playlists do OFFY."
+      },
+      "full_import": {
+        "title": "Importar faixas completas",
+        "description": "Utiliza sua sessão do Spotify para carregar todas as músicas de playlists longas (mais de 100 músicas) sem limitações."
+      },
+      "sign_out": "Desconectar",
+      "sign_in": "Entrar com Spotify",
+      "signed_out_title": "Não conectado",
+      "signed_out_description": "Conecte sua conta do Spotify para sincronizar playlists e curtidas",
+      "sync_now": "Sincronizar agora",
+      "syncing": "Sincronizando...",
+      "sync_started": "Importação das Músicas Curtidas iniciada!",
+      "sync_failed": "Falha ao iniciar sincronização das músicas curtidas.",
+      "sign_in_required": "Conecte sua conta do Spotify primeiro.",
+      "my_playlists": "Playlists do Spotify",
+      "my_playlists_desc": "Selecione uma playlist para importar com 1 clique para o OFFY.",
+      "connect_account": "Conecte sua conta do Spotify",
+      "connect_account_hint": "Faça login para ver e importar suas playlists e músicas curtidas.",
+      "liked_songs": "Músicas Curtidas",
+      "collection": "Coleção",
+      "no_playlists": "Nenhuma playlist encontrada."
     },
     "discord": {
       "description": "Mostra o que você está ouvindo no Discord com capa do álbum, badge do artista e barra de progresso.",

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import TextInput from "@/shared/ui/TextInput";
 import Tooltip from "@/shared/ui/Tooltip";
-import { CheckLine, InformationLine, LinkLine } from "@mingcute/react";
+import { CheckLine, InformationLine, LinkLine, SpotifyFill } from "@mingcute/react";
 import { useAddPlaylistTracks, useCreatePlaylist } from "../../hooks";
 import { notifyLibraryChanged } from "../../hooks/usePlaylists";
 import Dialog from "@/shared/ui/Dialog";
@@ -16,6 +16,7 @@ import { useModalStore } from "../../store/modalStore";
 import { useImportStore } from "../../store/importStore";
 import { resolveApiErrorMessage } from "@/shared/api";
 import { isYoutubeHost } from "@/shared/youtube";
+import SpotifyPlaylistsModal from "./SpotifyPlaylistsModal";
 
 type Tab = "create" | "import";
 
@@ -67,6 +68,7 @@ export default function CreatePlaylistModal() {
   const [importing, setImporting] = useState(false);
   const [createError, setCreateError] = useState("");
   const [importError, setImportError] = useState("");
+  const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const linkRef = useRef<HTMLInputElement>(null);
@@ -273,38 +275,52 @@ export default function CreatePlaylistModal() {
             }}
             className="flex flex-col gap-[10px]"
           >
-            <TextInput
-              className="!rounded-item !border-transparent !bg-fill"
-              ref={linkRef}
-              icon={<LinkLine size={16} />}
-              placeholder={t("common.paste_link_placeholder")}
-              value={importUrl}
-              hasError={Boolean(importError)}
-              onChange={(e) => {
-                setImportUrl(e.target.value);
-                if (importError) setImportError("");
-              }}
-              disabled={importing}
-              rightSlot={
-                detectedSource ? (
-                  <Tooltip content={detectedSource} side="top">
-                    <span className="inline-flex cursor-help">
-                      <CheckLine size={16} className="text-accent-primary" />
-                    </span>
-                  </Tooltip>
-                ) : (
-                  <Tooltip
-                    side="top"
-                    multiline
-                    content={t("common.import_sources_hint")}
-                  >
-                    <span className="inline-flex text-text-tertiary hover:text-text-secondary transition-colors cursor-help">
-                      <InformationLine size={16} />
-                    </span>
-                  </Tooltip>
-                )
-              }
-            />
+            <div className="flex items-center gap-[8px]">
+              <div className="flex-1 min-w-0">
+                <TextInput
+                  className="!rounded-item !border-transparent !bg-fill w-full"
+                  ref={linkRef}
+                  icon={<LinkLine size={16} />}
+                  placeholder={t("common.paste_link_placeholder")}
+                  value={importUrl}
+                  hasError={Boolean(importError)}
+                  onChange={(e) => {
+                    setImportUrl(e.target.value);
+                    if (importError) setImportError("");
+                  }}
+                  disabled={importing}
+                  rightSlot={
+                    detectedSource ? (
+                      <Tooltip content={detectedSource} side="top">
+                        <span className="inline-flex cursor-help">
+                          <CheckLine size={16} className="text-accent-primary" />
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip
+                        side="top"
+                        multiline
+                        content={t("common.import_sources_hint")}
+                      >
+                        <span className="inline-flex text-text-tertiary hover:text-text-secondary transition-colors cursor-help">
+                          <InformationLine size={16} />
+                        </span>
+                      </Tooltip>
+                    )
+                  }
+                />
+              </div>
+              <Tooltip content={t("settings.spotify.my_playlists") || "Playlists do Spotify"} side="top">
+                <button
+                  type="button"
+                  onClick={() => setSpotifyModalOpen(true)}
+                  className="flex h-[42px] w-[42px] items-center justify-center rounded-item bg-fill hover:bg-fill-hover text-[#1ED760] transition-colors border-none cursor-pointer shrink-0"
+                  title={t("settings.spotify.my_playlists") || "Playlists do Spotify"}
+                >
+                  <SpotifyFill size={20} />
+                </button>
+              </Tooltip>
+            </div>
             {importError && (
               <span className="text-caption text-accent-primary">
                 {importError}
@@ -321,6 +337,15 @@ export default function CreatePlaylistModal() {
           </form>
         )}
       </div>
+
+      <SpotifyPlaylistsModal
+        open={spotifyModalOpen}
+        onClose={() => setSpotifyModalOpen(false)}
+        onSelect={(url) => {
+          setSpotifyModalOpen(false);
+          void handleImport(url);
+        }}
+      />
     </Dialog>
   );
 }

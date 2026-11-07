@@ -14,6 +14,7 @@ import {
   useExternalItems,
   useLikedTrackCount,
   useYoutubeLibraryItems,
+  useSpotifyLibraryItems,
 } from "../hooks";
 import { useLikesCover } from "../hooks/useLikesCover";
 import { useTranslation } from "@/languages";
@@ -192,6 +193,7 @@ function OnlineLibraryPage() {
     isLoading: externalPlaylistsLoading,
   } = useExternalItems("playlist");
   const youtubeItems = useYoutubeLibraryItems();
+  const spotifyPlaylistItems = useSpotifyLibraryItems();
   const youtubePlaylistItems = useMemo(
     () => youtubeItems.filter((item) => item.kind === "playlist"),
     [youtubeItems],
@@ -247,6 +249,7 @@ function OnlineLibraryPage() {
         ...playlistItems,
         ...externalPlaylistItems,
         ...youtubePlaylistItems,
+        ...spotifyPlaylistItems,
         ...albumItems,
         ...youtubeAlbumItems,
         ...artistItems,
@@ -256,6 +259,7 @@ function OnlineLibraryPage() {
         ...playlistItems,
         ...externalPlaylistItems,
         ...youtubePlaylistItems,
+        ...spotifyPlaylistItems,
       ];
     } else if (activeTab === "albums") {
       source = [...albumItems, ...youtubeAlbumItems];
@@ -279,6 +283,7 @@ function OnlineLibraryPage() {
     playlistItems,
     externalPlaylistItems,
     youtubePlaylistItems,
+    spotifyPlaylistItems,
     albumItems,
     youtubeAlbumItems,
     artistItems,

@@ -19,6 +19,55 @@ import type {
   SavedTrackInput,
   SavedTrackRecord,
 } from "./saved-tracks/types";
+import type {
+  StoredSpotifySession,
+  SpotifyUserAccount,
+} from "./spotify-ipc";
+
+export type { StoredSpotifySession, SpotifyUserAccount };
+
+export interface SpotifyAuthApi {
+  login: () => Promise<{
+    success: boolean;
+    session?: StoredSpotifySession;
+    cancelled?: boolean;
+    error?: string;
+  }>;
+  logout: () => Promise<boolean>;
+  getSession: () => Promise<StoredSpotifySession | null>;
+  getUserPlaylists: () => Promise<{
+    items: Array<{
+      id: string;
+      title: string;
+      trackCount: number;
+      imageUrl: string;
+      spotifyUrl: string;
+      isPublic: boolean;
+    }>;
+  }>;
+  getPlaylistTracks: (playlistId: string) => Promise<{
+    tracks: Array<{
+      sourceId: string;
+      title: string;
+      artists: string[];
+      album?: string;
+      durationMs?: number;
+      coverUrl?: string;
+    }>;
+    total: number;
+  }>;
+  getLikedTracks: () => Promise<{
+    tracks: Array<{
+      sourceId: string;
+      title: string;
+      artists: string[];
+      album?: string;
+      durationMs?: number;
+      coverUrl?: string;
+    }>;
+    total: number;
+  }>;
+}
 
 export interface DiscordStatus {
   connected: boolean;
@@ -224,6 +273,7 @@ export interface LinerElectronApi {
     lyrics?: unknown,
   ) => Promise<boolean>;
   pathForFile: (file: File) => string;
+  spotifyAuth: SpotifyAuthApi;
 }
 
 const isHyprland = Boolean(
@@ -491,6 +541,15 @@ const api: LinerElectronApi = {
   savedTracksSetLyrics: (trackId, state, lyrics) =>
     ipcRenderer.invoke("saved-tracks:lyrics-set", trackId, state, lyrics),
   pathForFile: (file) => webUtils.getPathForFile(file),
+  spotifyAuth: {
+    login: () => ipcRenderer.invoke("spotify-auth:login"),
+    logout: () => ipcRenderer.invoke("spotify-auth:logout"),
+    getSession: () => ipcRenderer.invoke("spotify-auth:get-session"),
+    getUserPlaylists: () => ipcRenderer.invoke("spotify:get-user-playlists"),
+    getPlaylistTracks: (playlistId) =>
+      ipcRenderer.invoke("spotify:get-playlist-tracks", { playlistId }),
+    getLikedTracks: () => ipcRenderer.invoke("spotify:get-liked-tracks"),
+  },
 };
 
 if (location.hostname === "www.youtube.com") {
