@@ -33,14 +33,6 @@ export interface SpotifyAuthApi {
     cancelled?: boolean;
     error?: string;
   }>;
-  openBrowserLogin: () => Promise<{ success: boolean; port?: number; error?: string }>;
-  cancelBrowserLogin: () => Promise<boolean>;
-  loginWithCookie: (cookie: string) => Promise<{
-    success: boolean;
-    session?: StoredSpotifySession;
-    error?: string;
-  }>;
-  onConnected: (cb: (session: StoredSpotifySession) => void) => () => void;
   logout: () => Promise<boolean>;
   getSession: () => Promise<StoredSpotifySession | null>;
   getUserPlaylists: () => Promise<{
@@ -551,17 +543,6 @@ const api: LinerElectronApi = {
   pathForFile: (file) => webUtils.getPathForFile(file),
   spotifyAuth: {
     login: () => ipcRenderer.invoke("spotify-auth:login"),
-    openBrowserLogin: () => ipcRenderer.invoke("spotify-auth:open-browser-login"),
-    cancelBrowserLogin: () => ipcRenderer.invoke("spotify-auth:cancel-browser-login"),
-    loginWithCookie: (cookie: string) =>
-      ipcRenderer.invoke("spotify-auth:login-with-cookie", { cookie }),
-    onConnected: (cb: (session: StoredSpotifySession) => void) => {
-      const listener = (_: unknown, session: StoredSpotifySession) => cb(session);
-      ipcRenderer.on("spotify-auth:connected", listener);
-      return () => {
-        ipcRenderer.removeListener("spotify-auth:connected", listener);
-      };
-    },
     logout: () => ipcRenderer.invoke("spotify-auth:logout"),
     getSession: () => ipcRenderer.invoke("spotify-auth:get-session"),
     getUserPlaylists: () => ipcRenderer.invoke("spotify:get-user-playlists"),

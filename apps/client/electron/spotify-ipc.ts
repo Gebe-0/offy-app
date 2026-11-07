@@ -1,4 +1,3 @@
-import http from "node:http";
 import path from "node:path";
 import {
   app,
@@ -7,7 +6,6 @@ import {
   net,
   safeStorage,
   session,
-  shell,
   type IpcMainEvent,
   type IpcMainInvokeEvent,
 } from "electron";
@@ -32,6 +30,9 @@ export interface StoredSpotifySession {
   expiresAt: number;
   account: SpotifyUserAccount;
 }
+
+const CHROME_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 function isAppUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -94,125 +95,31 @@ export function registerSpotifyIpc(): {
   );
 
   let activeLoginWindow: BrowserWindow | null = null;
-  let localAuthServer: http.Server | null = null;
+  const spSession = session.fromPartition("persist:spotify");
 
-  function stopLocalAuthServer() {
-    if (localAuthServer) {
-      try {
-        localAuthServer.close();
-      } catch {}
-      localAuthServer = null;
-    }
-  }
+  // Set modern Chrome user agent to allow Google / Social auth
+  spSession.setUserAgent(CHROME_USER_AGENT);
 
-  async function validateAndStoreSession(spDcValue: string): Promise<{
-    success: boolean;
-    session?: StoredSpotifySession;
-    error?: string;
-  }> {
-    const cleanSpDc = extractSpDc(spDcValue);
-    if (!cleanSpDc) {
-      return {
-        success: false,
-        error: "Cookie sp_dc inválido ou não informado.",
-      };
-    }
+  let capturedBearerToken: string | null = null;
+  let lastCapturedAt = 0;
 
-    const spSession = session.fromPartition("persist:spotify");
-    try {
-      await spSession.cookies.set({
-        url: "https://open.spotify.com",
-        name: "sp_dc",
-        value: cleanSpDc,
-        domain: ".spotify.com",
-        path: "/",
-        secure: true,
-        httpOnly: true,
-        sameSite: "no_restriction",
-      });
-
-      const bgWin = new BrowserWindow({
-        show: false,
-        width: 300,
-        height: 300,
-        webPreferences: {
-          partition: "persist:spotify",
-          nodeIntegration: false,
-          contextIsolation: true,
-        },
-      });
-
-      try {
-        await bgWin.loadURL("https://open.spotify.com/");
-        const data = (await bgWin.webContents.executeJavaScript(`
-          (async () => {
-            try {
-              const tokenRes = await fetch("/api/token", { credentials: "include" });
-              if (!tokenRes.ok) return null;
-              const tokenJson = await tokenRes.json();
-              if (!tokenJson || !tokenJson.accessToken || tokenJson.isAnonymous) return null;
-              const meRes = await fetch("https://api.spotify.com/v1/me", {
-                headers: { "Authorization": "Bearer " + tokenJson.accessToken }
-              });
-              if (!meRes.ok) return null;
-              const meJson = await meRes.json();
-              return { token: tokenJson, me: meJson };
-            } catch (e) {
-              return null;
-            }
-          })()
-        `)) as {
-          token: {
-            accessToken: string;
-            accessTokenExpirationTimestampMs?: number;
-          };
-          me: {
-            id: string;
-            display_name?: string;
-            email?: string;
-            images?: Array<{ url: string }>;
-            product?: string;
-          };
-        } | null;
-
-        if (!data || !data.token?.accessToken || !data.me?.id) {
-          return {
-            success: false,
-            error:
-              "Não foi possível validar a conta. Verifique se você está conectado no Spotify e se o cookie sp_dc está correto.",
-          };
-        }
-
-        const finalSession: StoredSpotifySession = {
-          accessToken: data.token.accessToken,
-          spDc: cleanSpDc,
-          refreshToken: cleanSpDc,
-          expiresAt:
-            data.token.accessTokenExpirationTimestampMs ||
-            Date.now() + 3600_000,
-          account: {
-            id: data.me.id,
-            name: data.me.display_name || data.me.id,
-            email: data.me.email,
-            photoUrl: data.me.images?.[0]?.url,
-            product: data.me.product,
-          },
-        };
-
-        store.set(finalSession as unknown as Record<string, unknown>);
-        return { success: true, session: finalSession };
-      } finally {
-        if (!bgWin.isDestroyed()) {
-          bgWin.destroy();
+  // Intercept Bearer tokens sent to Spotify APIs by the official Web Player client
+  spSession.webRequest.onSendHeaders(
+    { urls: ["*://*.spotify.com/*"] },
+    (details) => {
+      const auth =
+        details.requestHeaders["Authorization"] ||
+        details.requestHeaders["authorization"] ||
+        details.requestHeaders["AUTHORIZATION"];
+      if (auth && typeof auth === "string" && auth.startsWith("Bearer ")) {
+        const token = auth.slice(7).trim();
+        if (token && token.length > 20) {
+          capturedBearerToken = token;
+          lastCapturedAt = Date.now();
         }
       }
-    } catch (err: any) {
-      return {
-        success: false,
-        error: err?.message || "Erro inesperado ao validar sessão do Spotify.",
-      };
-    }
-  }
+    },
+  );
 
   async function getValidToken(): Promise<string | null> {
     const raw = store.get();
@@ -227,36 +134,39 @@ export function registerSpotifyIpc(): {
     try {
       const bgWin = new BrowserWindow({
         show: false,
-        width: 200,
-        height: 200,
+        width: 300,
+        height: 300,
         webPreferences: {
           partition: "persist:spotify",
           nodeIntegration: false,
           contextIsolation: true,
         },
       });
+      bgWin.webContents.setUserAgent(CHROME_USER_AGENT);
 
+      const prevCapturedAt = lastCapturedAt;
       await bgWin.loadURL("https://open.spotify.com/");
-      const fresh = await bgWin.webContents.executeJavaScript(`
-        (async () => {
-          try {
-            const res = await fetch("/api/token", { credentials: "include" });
-            if (!res.ok) return null;
-            return await res.json();
-          } catch { return null; }
-        })()
-      `);
-      bgWin.destroy();
 
-      if (fresh && fresh.accessToken) {
+      // Wait up to 6 seconds for Spotify Web Player to make an API call with fresh token
+      for (let i = 0; i < 12; i++) {
+        if (capturedBearerToken && lastCapturedAt > prevCapturedAt) {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      if (!bgWin.isDestroyed()) {
+        bgWin.destroy();
+      }
+
+      if (capturedBearerToken && lastCapturedAt > prevCapturedAt) {
         const updated: StoredSpotifySession = {
           ...current,
-          accessToken: fresh.accessToken,
-          expiresAt:
-            fresh.accessTokenExpirationTimestampMs || Date.now() + 3600_000,
+          accessToken: capturedBearerToken,
+          expiresAt: Date.now() + 3600_000,
         };
         store.set(updated as unknown as Record<string, unknown>);
-        return fresh.accessToken;
+        return capturedBearerToken;
       }
     } catch (err) {
       console.error("[spotify] silent token refresh failed:", err);
@@ -273,120 +183,14 @@ export function registerSpotifyIpc(): {
   ipcMain.handle("spotify-auth:logout", async (event) => {
     if (!fromApp(event)) return false;
     store.set(null);
-    stopLocalAuthServer();
+    capturedBearerToken = null;
     try {
-      const spSession = session.fromPartition("persist:spotify");
       await spSession.clearStorageData();
     } catch (err) {
       console.error("[spotify] clearStorageData failed:", err);
     }
     return true;
   });
-
-  ipcMain.handle("spotify-auth:open-browser-login", async (event) => {
-    if (!fromApp(event)) return { success: false, error: "Unauthorized" };
-
-    stopLocalAuthServer();
-
-    localAuthServer = http.createServer((req, res) => {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Private-Network", "true");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "*");
-
-      if (req.method === "OPTIONS") {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      try {
-        const u = new URL(req.url || "", "http://127.0.0.1:43829");
-        if (u.pathname === "/auth" || u.pathname === "/callback") {
-          const cookie =
-            u.searchParams.get("cookie") || u.searchParams.get("sp_dc") || "";
-          if (cookie) {
-            void (async () => {
-              const resValidation = await validateAndStoreSession(cookie);
-              if (resValidation.success && resValidation.session) {
-                res.writeHead(200, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    success: true,
-                    user: resValidation.session.account.name,
-                  }),
-                );
-                for (const win of BrowserWindow.getAllWindows()) {
-                  if (!win.isDestroyed()) {
-                    win.webContents.send(
-                      "spotify-auth:connected",
-                      resValidation.session,
-                    );
-                  }
-                }
-                stopLocalAuthServer();
-              } else {
-                res.writeHead(400, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    success: false,
-                    error: resValidation.error,
-                  }),
-                );
-              }
-            })();
-            return;
-          }
-        }
-      } catch {}
-
-      res.writeHead(404);
-      res.end();
-    });
-
-    localAuthServer.on("error", (err) => {
-      console.warn("[spotify] local loopback server error:", err);
-    });
-
-    try {
-      localAuthServer.listen(43829, "127.0.0.1");
-    } catch (e) {
-      console.warn("[spotify] listen error on 43829:", e);
-    }
-
-    try {
-      await shell.openExternal(
-        "https://accounts.spotify.com/en/login?continue=https%3A%2F%2Fopen.spotify.com%2F",
-      );
-    } catch (err) {
-      console.error("[spotify] failed to open external browser:", err);
-    }
-
-    return { success: true, port: 43829 };
-  });
-
-  ipcMain.handle("spotify-auth:cancel-browser-login", (event) => {
-    if (!fromApp(event)) return false;
-    stopLocalAuthServer();
-    return true;
-  });
-
-  ipcMain.handle(
-    "spotify-auth:login-with-cookie",
-    async (event, { cookie }: { cookie: string }) => {
-      if (!fromApp(event)) return { success: false, error: "Unauthorized" };
-      const res = await validateAndStoreSession(cookie);
-      if (res.success && res.session) {
-        stopLocalAuthServer();
-        for (const win of BrowserWindow.getAllWindows()) {
-          if (!win.isDestroyed()) {
-            win.webContents.send("spotify-auth:connected", res.session);
-          }
-        }
-      }
-      return res;
-    },
-  );
 
   ipcMain.handle("spotify-auth:login", async (event) => {
     if (!fromApp(event)) return { success: false, error: "Unauthorized" };
@@ -397,17 +201,17 @@ export function registerSpotifyIpc(): {
 
     return new Promise((resolve) => {
       let resolved = false;
-      const spSession = session.fromPartition("persist:spotify");
 
       const authWindow = new BrowserWindow({
-        width: 480,
+        width: 500,
         height: 720,
         title: "OFFY - Conectar Spotify",
         center: true,
-        resizable: false,
-        minimizable: false,
+        resizable: true,
+        minimizable: true,
         maximizable: false,
         autoHideMenuBar: true,
+        backgroundColor: "#121212",
         webPreferences: {
           partition: "persist:spotify",
           nodeIntegration: false,
@@ -416,6 +220,7 @@ export function registerSpotifyIpc(): {
         },
       });
 
+      authWindow.webContents.setUserAgent(CHROME_USER_AGENT);
       activeLoginWindow = authWindow;
 
       const finish = (result: {
@@ -440,81 +245,111 @@ export function registerSpotifyIpc(): {
         }
       });
 
+      let isExtracting = false;
+
       const attemptExtraction = async () => {
-        if (resolved || authWindow.isDestroyed()) return;
+        if (resolved || isExtracting || authWindow.isDestroyed()) return;
         const currentUrl = authWindow.webContents.getURL();
         if (!currentUrl.includes("open.spotify.com")) return;
 
+        isExtracting = true;
         try {
+          authWindow.setTitle("OFFY - Conectando conta...");
+
+          // 1. Get captured token or probe from page context
+          let token = capturedBearerToken;
+
+          if (!token) {
+            const pageToken = await authWindow.webContents.executeJavaScript(`
+              (async () => {
+                try {
+                  const res = await fetch("/get_access_token?reason=transport&productType=web_player", { credentials: "include" });
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.accessToken && !data.isAnonymous) return data.accessToken;
+                  }
+                } catch {}
+                try {
+                  const res2 = await fetch("/api/token", { credentials: "include" });
+                  if (res2.ok) {
+                    const data2 = await res2.json();
+                    if (data2 && data2.accessToken && !data2.isAnonymous) return data2.accessToken;
+                  }
+                } catch {}
+                return null;
+              })()
+            `);
+            if (pageToken) token = pageToken;
+          }
+
+          if (!token) {
+            isExtracting = false;
+            return;
+          }
+
+          // 2. Validate token and fetch user profile
+          const meRes = await net.fetch("https://api.spotify.com/v1/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (!meRes.ok) {
+            isExtracting = false;
+            return;
+          }
+
+          const me = (await meRes.json()) as {
+            id: string;
+            display_name?: string;
+            email?: string;
+            images?: Array<{ url: string }>;
+            product?: string;
+          };
+
+          if (!me || !me.id) {
+            isExtracting = false;
+            return;
+          }
+
+          // 3. Extract sp_dc session cookie
           const cookies = await spSession.cookies.get({
             domain: ".spotify.com",
           });
           const spDc = cookies.find((c) => c.name === "sp_dc")?.value;
 
-          const data = (await authWindow.webContents.executeJavaScript(`
-            (async () => {
-              try {
-                const tokenRes = await fetch("/api/token", { credentials: "include" });
-                if (!tokenRes.ok) return null;
-                const tokenJson = await tokenRes.json();
-                if (!tokenJson || !tokenJson.accessToken || tokenJson.isAnonymous) return null;
-                const meRes = await fetch("https://api.spotify.com/v1/me", {
-                  headers: { "Authorization": "Bearer " + tokenJson.accessToken }
-                });
-                if (!meRes.ok) return null;
-                const meJson = await meRes.json();
-                return { token: tokenJson, me: meJson };
-              } catch (e) {
-                return null;
-              }
-            })()
-          `)) as {
-            token: {
-              accessToken: string;
-              accessTokenExpirationTimestampMs?: number;
-            };
-            me: {
-              id: string;
-              display_name?: string;
-              email?: string;
-              images?: Array<{ url: string }>;
-              product?: string;
-            };
-          } | null;
+          const finalSession: StoredSpotifySession = {
+            accessToken: token,
+            spDc,
+            refreshToken: spDc,
+            expiresAt: Date.now() + 3600_000,
+            account: {
+              id: me.id,
+              name: me.display_name || me.id,
+              email: me.email,
+              photoUrl: me.images?.[0]?.url,
+              product: me.product,
+            },
+          };
 
-          if (data && data.token && data.me) {
-            const finalSession: StoredSpotifySession = {
-              accessToken: data.token.accessToken,
-              spDc,
-              refreshToken: spDc,
-              expiresAt:
-                data.token.accessTokenExpirationTimestampMs ||
-                Date.now() + 3600_000,
-              account: {
-                id: data.me.id,
-                name: data.me.display_name || data.me.id,
-                email: data.me.email,
-                photoUrl: data.me.images?.[0]?.url,
-                product: data.me.product,
-              },
-            };
-            store.set(finalSession as unknown as Record<string, unknown>);
-            finish({ success: true, session: finalSession });
-          }
+          store.set(finalSession as unknown as Record<string, unknown>);
+          finish({ success: true, session: finalSession });
         } catch {
-          // not ready yet
+          isExtracting = false;
         }
       };
 
       const checkTimer = setInterval(() => {
         void attemptExtraction();
-      }, 1000);
+      }, 700);
 
       authWindow.webContents.on("did-finish-load", () => {
         void attemptExtraction();
       });
 
       authWindow.webContents.on("did-navigate-in-page", () => {
+        void attemptExtraction();
+      });
+
+      authWindow.webContents.on("did-navigate", () => {
         void attemptExtraction();
       });
 
