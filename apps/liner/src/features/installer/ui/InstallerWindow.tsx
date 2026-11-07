@@ -158,7 +158,7 @@ export function InstallerWindow({ onFinish }: InstallerWindowProps) {
               Instalação do OFFY
             </span>
             <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[10.5px] font-[500] text-white/60">
-              v1.0.7
+              v1.0.8
             </span>
           </div>
 
