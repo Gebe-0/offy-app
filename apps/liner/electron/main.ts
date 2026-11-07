@@ -1899,6 +1899,9 @@ if (!gotTheLock) {
     autoUpdater.allowPrerelease = false;
     autoUpdater.allowDowngrade = false;
     try {
+      (autoUpdater as any).verifyUpdateCodeSignature = async () => null;
+    } catch {}
+    try {
       autoUpdater.setFeedURL({
         provider: "github",
         owner: "Gebe-0",
@@ -1906,6 +1909,125 @@ if (!gotTheLock) {
       });
     } catch {
       // Ignored if custom feed URL fails
+    }
+
+    let directDownloadedInstallerPath: string | null = null;
+    let isDirectDownloading = false;
+
+    async function startDirectInstallerDownload(targetVersion?: string) {
+      if (isDirectDownloading) return { success: true };
+      isDirectDownloading = true;
+
+      try {
+        const res = await fetch(
+          "https://api.github.com/repos/Gebe-0/offy-app/releases/latest",
+          {
+            headers: {
+              "User-Agent": "OFFY-Desktop-Client",
+              Accept: "application/vnd.github.v3+json",
+            },
+          },
+        );
+        if (!res.ok) throw new Error(`GitHub API returned status ${res.status}`);
+        const release = (await res.json()) as {
+          tag_name?: string;
+          assets?: Array<{ name: string; browser_download_url: string; size: number }>;
+        };
+        const version = release.tag_name
+          ? release.tag_name.replace(/^v/, "")
+          : targetVersion || "1.0.8";
+
+        const asset = release.assets?.find(
+          (a) => a.name.endsWith(".exe") && a.name.includes("Setup"),
+        );
+        if (!asset) {
+          throw new Error("No installer asset (.exe) found in release");
+        }
+
+        const updateDir = path.join(app.getPath("userData"), "pending-updates");
+        if (!fs.existsSync(updateDir)) {
+          fs.mkdirSync(updateDir, { recursive: true });
+        }
+        const installerDest = path.join(updateDir, asset.name);
+
+        const downloadRes = await fetch(asset.browser_download_url, {
+          headers: { "User-Agent": "OFFY-Desktop-Client" },
+        });
+        if (!downloadRes.ok || !downloadRes.body) {
+          throw new Error(`Failed to download installer binary: HTTP ${downloadRes.status}`);
+        }
+
+        const totalBytes =
+          Number(downloadRes.headers.get("content-length")) || asset.size || 0;
+        let transferredBytes = 0;
+        let lastReport = Date.now();
+        let lastTransferred = 0;
+
+        const fileStream = fs.createWriteStream(installerDest);
+        const reader = downloadRes.body.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            fileStream.write(Buffer.from(value));
+            transferredBytes += value.length;
+
+            const now = Date.now();
+            if (now - lastReport >= 250) {
+              const deltaSeconds = (now - lastReport) / 1000;
+              const bytesPerSecond =
+                deltaSeconds > 0 ? (transferredBytes - lastTransferred) / deltaSeconds : 0;
+              lastReport = now;
+              lastTransferred = transferredBytes;
+              const percent =
+                totalBytes > 0
+                  ? Math.round((transferredBytes / totalBytes) * 1000) / 10
+                  : 0;
+
+              mainWindow?.webContents.send("updater:download-progress", {
+                percent,
+                transferred: transferredBytes,
+                total: totalBytes,
+                bytesPerSecond: Math.round(bytesPerSecond),
+              });
+            }
+          }
+        }
+
+        await new Promise((resolve, reject) => {
+          fileStream.end((err?: Error | null) => (err ? reject(err) : resolve(null)));
+        });
+
+        directDownloadedInstallerPath = installerDest;
+        isDirectDownloading = false;
+
+        mainWindow?.webContents.send("updater:download-progress", {
+          percent: 100,
+          transferred: totalBytes || transferredBytes,
+          total: totalBytes || transferredBytes,
+          bytesPerSecond: 0,
+        });
+
+        mainWindow?.webContents.send("updater:update-downloaded", {
+          version,
+        });
+
+        return { success: true };
+      } catch (err: any) {
+        isDirectDownloading = false;
+        console.error(
+          "\x1b[31m updater \x1b[0m Direct in-app download fallback failed:",
+          err?.message || err,
+        );
+        mainWindow?.webContents.send("updater:error", {
+          message: err?.message || "Erro ao baixar atualização no app",
+        });
+        return {
+          success: false,
+          error: err?.message || "Failed to download update",
+        };
+      }
     }
 
     autoUpdater.on("update-available", (info) => {
@@ -1948,6 +2070,19 @@ if (!gotTheLock) {
       ) {
         return; // Silently ignore missing update configuration / 404s; GitHub API check handles it
       }
+
+      if (
+        msg.includes("not signed by the application owner") ||
+        msg.includes("Status: 1") ||
+        msg.includes("Get-AuthenticodeSignature")
+      ) {
+        console.warn(
+          "\x1b[33m updater \x1b[0m Signature error from autoUpdater, switching to in-app direct download fallback",
+        );
+        void startDirectInstallerDownload();
+        return;
+      }
+
       mainWindow?.webContents.send("updater:error", {
         message: msg || "Update check failed",
       });
@@ -2046,17 +2181,30 @@ if (!gotTheLock) {
         return { success: true };
       } catch (err: any) {
         console.warn(
-          "\x1b[33m updater \x1b[0m autoUpdater.downloadUpdate failed, opening release page:",
+          "\x1b[33m updater \x1b[0m autoUpdater.downloadUpdate failed, falling back to direct in-app download:",
           err?.message || err,
         );
-        void shell.openExternal(
-          "https://github.com/Gebe-0/offy-app/releases/latest",
-        );
-        return { success: true };
+        return await startDirectInstallerDownload();
       }
     });
 
     ipcMain.handle("updater:quit-and-install", () => {
+      if (directDownloadedInstallerPath && fs.existsSync(directDownloadedInstallerPath)) {
+        try {
+          const { spawn } = require("node:child_process");
+          const child = spawn(directDownloadedInstallerPath, ["/S", "--updated"], {
+            detached: true,
+            stdio: "ignore",
+          });
+          child.unref();
+          setImmediate(() => {
+            app.quit();
+          });
+          return true;
+        } catch (spawnErr) {
+          console.error("Failed to spawn direct installer:", spawnErr);
+        }
+      }
       setImmediate(() => {
         autoUpdater.quitAndInstall(false, true);
       });

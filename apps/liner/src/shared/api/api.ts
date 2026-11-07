@@ -72,7 +72,7 @@ import {
 
 const CLIENT_VERSION =
   (import.meta.env.VITE_CLIENT_VERSION as string | undefined) ||
-  "1.0.7-desktop";
+  "1.0.8-desktop";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const LYRICS_CONNECT_TIMEOUT_MS = 12000;
