@@ -63,7 +63,7 @@ app.get("/", async (request, reply) => {
       }),
     );
   }
-  return { ok: true, name: "offy-api", version: "1.1.0" };
+  return { ok: true, name: "offy-api", version: "1.1.1" };
 });
 
 await app.register(registerAuthRoutes);
