@@ -63,6 +63,7 @@ export interface SessionState {
   accentVariant: AccentVariant;
   pauseOnDeviceChange: boolean;
   autoplaySimilar: boolean;
+  crossfadeDuration: number;
   trackDoubleClickBehavior: TrackDoubleClickBehavior;
   defaultPlaybackContext: DefaultPlaybackContext;
   fullscreen: boolean;
@@ -120,6 +121,7 @@ export interface PlayerStore extends PlayerState {
   setAccentVariant: (variant: AccentVariant) => void;
   setPauseOnDeviceChange: (value: boolean) => void;
   setAutoplaySimilar: (value: boolean) => void;
+  setCrossfadeDuration: (durationSeconds: number) => void;
   setTrackDoubleClickBehavior: (value: TrackDoubleClickBehavior) => void;
   setDefaultPlaybackContext: (value: DefaultPlaybackContext) => void;
   setFullscreen: (value: boolean) => void;
@@ -192,6 +194,7 @@ export const usePlayerStore = create<PlayerStore>()(
       accentVariant: "default",
       pauseOnDeviceChange: true,
       autoplaySimilar: true,
+      crossfadeDuration: 0,
       trackDoubleClickBehavior: "play",
       defaultPlaybackContext: "resume",
       fullscreen: false,
@@ -238,6 +241,10 @@ export const usePlayerStore = create<PlayerStore>()(
         set({ pauseOnDeviceChange }),
       setAutoplaySimilar: (autoplaySimilar: boolean) =>
         set({ autoplaySimilar }),
+      setCrossfadeDuration: (crossfadeDuration: number) =>
+        set({
+          crossfadeDuration: Math.max(0, Math.min(12, Math.round(crossfadeDuration))),
+        }),
       setTrackDoubleClickBehavior: (
         trackDoubleClickBehavior: TrackDoubleClickBehavior,
       ) => set({ trackDoubleClickBehavior }),
@@ -394,6 +401,7 @@ export const usePlayerStore = create<PlayerStore>()(
         accentVariant: state.accentVariant,
         pauseOnDeviceChange: state.pauseOnDeviceChange,
         autoplaySimilar: state.autoplaySimilar,
+        crossfadeDuration: state.crossfadeDuration,
         trackDoubleClickBehavior: state.trackDoubleClickBehavior,
         defaultPlaybackContext: state.defaultPlaybackContext,
         playbackRate: state.playbackRate,

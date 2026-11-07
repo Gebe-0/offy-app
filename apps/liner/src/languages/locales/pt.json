@@ -713,6 +713,11 @@
       "title": "Reproduzir faixas similares automaticamente",
       "description": "Adiciona músicas similares automaticamente quando a sua fila termina."
     },
+    "crossfade": {
+      "title": "Transição entre faixas (Crossfade)",
+      "description": "Permite uma transição gradual e suave de volume entre as músicas.",
+      "disabled": "Desativado"
+    },
     "track_double_click": {
       "title": "Duplo clique na faixa",
       "description": "Escolha o que acontece quando você clica duas vezes em um cartão de música.",

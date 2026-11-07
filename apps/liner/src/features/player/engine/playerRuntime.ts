@@ -58,6 +58,7 @@ export class PlayerRuntime {
   // loaded / cached track fires waiting -> playing within milliseconds, and flipping
   // the status for that re-animated the play / pause button on every seek
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
+  private isCrossfading = false;
   public onEnded?: () => void;
   public onError?: (info: { trackId: string; message: string }) => void;
 
@@ -275,6 +276,26 @@ export class PlayerRuntime {
         this.recoveryHoldUntilMs = null;
         this.recoveryAttempts = 0;
       }
+
+      // Crossfade transition when approaching the end of track
+      const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
+      if (
+        crossfadeDuration > 0 &&
+        !this.isCrossfading &&
+        audioEl.duration > 0 &&
+        audioEl.duration > crossfadeDuration &&
+        audioEl.currentTime >= audioEl.duration - crossfadeDuration &&
+        audioEl.currentTime > 2
+      ) {
+        this.isCrossfading = true;
+        log("cyan", "audio", `crossfade starting (${crossfadeDuration}s transition)`);
+        this.fadeVolume(0, crossfadeDuration * 1000, () => {
+          this.isCrossfading = false;
+        });
+        this.onEnded?.();
+        const state = usePlayerStore.getState();
+        state.dispatch({ type: "SKIP_NEXT", isAutoEnd: true });
+      }
     });
 
     audioEl.addEventListener("durationchange", () => {
@@ -331,6 +352,10 @@ export class PlayerRuntime {
       if (this.isResetting || audioEl !== this.audio) return;
       if (!this.currentTrackId) return;
       if (this.attachedTrackId !== this.currentTrackId) return;
+      if (this.isCrossfading) {
+        this.isCrossfading = false;
+        return;
+      }
 
       // Ensure the track truly finished playing (not an empty media load or teardown artefact)
       const duration = audioEl.duration;
@@ -759,6 +784,7 @@ export class PlayerRuntime {
     bypassCache: boolean = false,
   ) {
     this.cancelFade();
+    this.isCrossfading = false;
     this.pendingStartPositionMs = startPositionMs;
     const epoch = ++this.loadEpoch;
 
@@ -863,7 +889,9 @@ export class PlayerRuntime {
 
         if (epoch === this.loadEpoch) {
           usePlayerStore.getState().setStatus("playing");
-          this.fadeVolume(usePlayerStore.getState().volume, 180);
+          const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
+          const fadeInMs = crossfadeDuration > 0 ? Math.min(crossfadeDuration * 1000, 3000) : 180;
+          this.fadeVolume(usePlayerStore.getState().volume, fadeInMs);
         }
         logNowPlaying(track, true, audioStartLatencyMs);
         return;
@@ -935,7 +963,9 @@ export class PlayerRuntime {
 
       if (epoch === this.loadEpoch) {
         usePlayerStore.getState().setStatus("playing");
-        this.fadeVolume(usePlayerStore.getState().volume, 180);
+        const crossfadeDuration = usePlayerStore.getState().crossfadeDuration;
+        const fadeInMs = crossfadeDuration > 0 ? Math.min(crossfadeDuration * 1000, 3000) : 180;
+        this.fadeVolume(usePlayerStore.getState().volume, fadeInMs);
         this.cacheAudioInBackground(track, stream, bgCacheController.signal);
       }
       logNowPlaying(track, false, audioStartLatencyMs);
