@@ -59,6 +59,7 @@ export class PlayerRuntime {
   // the status for that re-animated the play / pause button on every seek
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
   private isCrossfading = false;
+  public getNextTrack?: () => Track | null;
   public onEnded?: () => void;
   public onError?: (info: { trackId: string; message: string }) => void;
 
@@ -287,14 +288,17 @@ export class PlayerRuntime {
         audioEl.currentTime >= audioEl.duration - crossfadeDuration &&
         audioEl.currentTime > 2
       ) {
-        this.isCrossfading = true;
-        log("cyan", "audio", `crossfade starting (${crossfadeDuration}s transition)`);
-        this.fadeVolume(0, crossfadeDuration * 1000, () => {
-          this.isCrossfading = false;
-        });
-        this.onEnded?.();
-        const state = usePlayerStore.getState();
-        state.dispatch({ type: "SKIP_NEXT", isAutoEnd: true });
+        const nextTrack = this.getNextTrack?.();
+        if (nextTrack) {
+          this.isCrossfading = true;
+          log("cyan", "audio", `fading out ending track (${crossfadeDuration}s crossfade)`);
+          this.fadeVolume(0, crossfadeDuration * 1000, () => {
+            this.isCrossfading = false;
+            this.onEnded?.();
+            const state = usePlayerStore.getState();
+            state.dispatch({ type: "SKIP_NEXT", isAutoEnd: true });
+          });
+        }
       }
     });
 

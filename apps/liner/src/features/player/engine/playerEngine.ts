@@ -348,6 +348,11 @@ class PlayerEngine {
     });
 
     if (playerRuntime) {
+      playerRuntime.getNextTrack = () => {
+        const nextIdx = this.computeNextIndex(true);
+        if (nextIdx === null) return null;
+        return usePlayerStore.getState().queue[nextIdx] ?? null;
+      };
       playerRuntime.onEnded = () => {
         const isRepeatOne = usePlayerStore.getState().repeat === "one";
         this.telemetry.onTrackCompleted(isRepeatOne);
@@ -1290,7 +1295,7 @@ class PlayerEngine {
     void this.skipNext(false);
   }
 
-  private computeNextIndex(isAutoEnd: boolean = false): number | null {
+  public computeNextIndex(isAutoEnd: boolean = false): number | null {
     const store = usePlayerStore.getState();
     const queueSize = store.queue.length;
     if (queueSize === 0 || store.currentIndex < 0) return null;

@@ -61,7 +61,7 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
         descKey="settings.crossfade.description"
         searchQuery={searchQuery}
         control={
-          <div className="w-[180px]">
+          <div className="w-[220px]">
             <Slider
               min={0}
               max={12}
