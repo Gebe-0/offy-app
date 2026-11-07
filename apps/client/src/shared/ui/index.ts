@@ -50,6 +50,7 @@ export {
   default as RootErrorFallback,
   type RootErrorFallbackProps,
 } from "./RootErrorFallback";
+export { default as NotFoundPage } from "./NotFoundPage";
 export {
   default as CircleDitherCanvas,
   type CircleDitherCanvasProps,

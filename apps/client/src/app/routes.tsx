@@ -15,6 +15,7 @@ import PlayerPage from "@/features/player/ui/FullscreenPlayer";
 import { FullscreenRouteContext } from "@/features/navigation/fullscreenRouteContext";
 import KeepAlivePage from "./KeepAlivePage";
 import { useOfflineModeStore } from "@/features/connectivity";
+import { NotFoundPage } from "@/shared/ui";
 
 const KEPT_PAGES: ReadonlyArray<{ path: string; element: ReactElement }> = [
   {
@@ -81,7 +82,7 @@ export function AppRoutes() {
             <Route path="/collection" element={<CollectionPage />} />
             <Route path="/settings" element={<Navigate to="/" replace />} />
             <Route path={PLAYER_PATH} element={null} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
       )}
