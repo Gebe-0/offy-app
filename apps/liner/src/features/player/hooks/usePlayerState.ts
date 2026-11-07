@@ -21,6 +21,7 @@ const EMPTY_STATE: PlayerState = {
   accentVariant: "default",
   pauseOnDeviceChange: true,
   autoplaySimilar: true,
+  crossfadeDuration: 0,
   trackDoubleClickBehavior: "play",
   defaultPlaybackContext: "resume",
   fullscreen: false,

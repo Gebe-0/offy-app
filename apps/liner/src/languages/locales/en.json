@@ -782,6 +782,11 @@
       "title": "Autoplay similar tracks",
       "description": "Automatically add similar songs when your queue ends."
     },
+    "crossfade": {
+      "title": "Crossfade transition",
+      "description": "Allows a gradual and smooth volume transition between songs.",
+      "disabled": "Off"
+    },
     "track_double_click": {
       "title": "Double-click on track",
       "description": "Choose what happens when you double-click a song card.",

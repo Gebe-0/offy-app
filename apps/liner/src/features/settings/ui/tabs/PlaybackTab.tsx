@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/languages";
 import { usePlayerStore } from "@/features/player";
-import { ToggleSwitch } from "@/shared/ui";
+import { ToggleSwitch, Slider } from "@/shared/ui";
 import { SettingRow, SettingSection, SegmentedControl } from "../controls";
 
 export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
@@ -10,6 +10,10 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const autoplaySimilar = usePlayerStore((state) => state.autoplaySimilar);
   const setAutoplaySimilar = usePlayerStore(
     (state) => state.setAutoplaySimilar,
+  );
+  const crossfadeDuration = usePlayerStore((state) => state.crossfadeDuration);
+  const setCrossfadeDuration = usePlayerStore(
+    (state) => state.setCrossfadeDuration,
   );
   const trackDoubleClickBehavior = usePlayerStore(
     (state) => state.trackDoubleClickBehavior,
@@ -47,6 +51,29 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
             checked={autoplaySimilar}
             onChange={setAutoplaySimilar}
           />
+        }
+      />
+
+      <SettingRow
+        title={t("settings.crossfade.title")}
+        description={t("settings.crossfade.description")}
+        titleKey="settings.crossfade.title"
+        descKey="settings.crossfade.description"
+        searchQuery={searchQuery}
+        control={
+          <div className="w-[180px]">
+            <Slider
+              min={0}
+              max={12}
+              step={1}
+              value={crossfadeDuration}
+              onChange={setCrossfadeDuration}
+              formatValue={(val) =>
+                val === 0 ? t("settings.crossfade.disabled") : `${val}s`
+              }
+              ariaLabel={t("settings.crossfade.title")}
+            />
+          </div>
         }
       />
 
