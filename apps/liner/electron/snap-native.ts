@@ -69,7 +69,7 @@ interface SnapPreviewAddon {
 
 /** the built add-on, or null (not built, not windows, or it failed to load) */
 export function loadSnapPreviewAddon(appRoot: string): SnapPreviewAddon | null {
-  if (!isWindows11()) return null;
+  if (!isWindows10Or11()) return null;
   const candidates = [
     path.join(
       appRoot,
@@ -123,6 +123,14 @@ export function loadSnapPreviewAddon(appRoot: string): SnapPreviewAddon | null {
     }
   }
   return null;
+}
+
+/** windows 10 (1809+) or 11 has Windows.UI.Composition support (build 17763+) */
+export function isWindows10Or11(): boolean {
+  return (
+    process.platform === "win32" &&
+    Number(os.release().split(".")[2] ?? 0) >= 17763
+  );
 }
 
 /** windows 11 is build 22000+ (os.release() is "10.0.<build>") */

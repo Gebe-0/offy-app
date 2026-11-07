@@ -237,7 +237,7 @@ export class OverlayManager {
       win.show();
       win.focus();
     };
-    if (this.focusMainHandler && win.isMinimized())
+    if (this.focusMainHandler)
       this.focusMainHandler(restore);
     else restore();
   }
@@ -1144,6 +1144,11 @@ export class OverlayManager {
     });
 
     const win = this.overlayWindow;
+    if (process.platform === "win32") {
+      win.hookWindowMessage(0x00A3, () => {
+        this.focusMainWindow();
+      });
+    }
     this.resetContentReady();
     win.webContents.on("render-process-gone", (_event, details) =>
       this.handleRendererGone(win, details.reason),
