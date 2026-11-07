@@ -13,7 +13,7 @@ import { registerRecommendationRoutes } from "./routes/recommendations.js";
 import { registerPresenceRoutes } from "./routes/presence.js";
 import { registerJamRoutes } from "./routes/jam.js";
 import { registerDocsRoutes } from "./routes/docs.js";
-import { registerShareRoutes } from "./routes/share.js";
+import { registerShareRoutes, renderNotFoundHtml, renderShareHtml } from "./routes/share.js";
 import { sendError } from "./http.js";
 
 const app = Fastify({
@@ -51,6 +51,21 @@ app.get("/health", async () => {
   return { ok: true, dbMs: Date.now() - started };
 });
 
+app.get("/", async (request, reply) => {
+  const accept = request.headers.accept ?? "";
+  if (accept.includes("text/html")) {
+    reply.type("text/html; charset=utf-8");
+    return reply.send(
+      renderShareHtml("home", "", {
+        title: "OFFY Music Player",
+        subtitle: "Ouça suas músicas favoritas sem limites e com alta fidelidade.",
+        badge: "OFFY APP",
+      }),
+    );
+  }
+  return { ok: true, name: "offy-api", version: "1.1.0" };
+});
+
 await app.register(registerAuthRoutes);
 await app.register(registerCatalogRoutes);
 await app.register(registerLibraryRoutes);
@@ -68,6 +83,21 @@ app.setErrorHandler((error, request, reply) => {
   request.log.error({ err: error }, "request failed");
   if (reply.sent) return;
   sendError(reply, error);
+});
+
+app.setNotFoundHandler((request, reply) => {
+  const accept = request.headers.accept ?? "";
+  const isHtml = accept.includes("text/html");
+  const isApiRoute =
+    request.url.startsWith("/v1/") || request.url.startsWith("/health");
+
+  if (isHtml || (!isApiRoute && request.method === "GET")) {
+    reply.status(404).type("text/html; charset=utf-8");
+    return reply.send(renderNotFoundHtml());
+  }
+
+  reply.status(404);
+  return reply.send({ code: "NOT_FOUND", message: "route not found" });
 });
 
 const shutdown = async (signal: string) => {
