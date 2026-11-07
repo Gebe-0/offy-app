@@ -41,7 +41,7 @@ export default function SpotifyAccountCard() {
           <AppImage src={account.photoUrl} alt="" fill />
         ) : undefined
       }
-      placeholderIcon={<SpotifyFill size={24} className="text-[#1ED760]" />}
+      placeholderIcon={<SpotifyFill size={24} />}
       title={title}
       subtitle={subtitle}
       loading={loading || inAction}
@@ -65,10 +65,10 @@ export default function SpotifyAccountCard() {
             disabled={inAction}
             className={cn(
               accountCardActionClassName,
-              "bg-[#1ED760] text-black hover:bg-[#1db954] font-semibold",
+              "bg-text-primary/85 text-bg-primary hover:bg-text-primary",
             )}
           >
-            {t("settings.spotify.sign_in") || "Entrar com Spotify"}
+            {t("settings.spotify.sign_in") || "Entrar"}
           </button>
         )
       }

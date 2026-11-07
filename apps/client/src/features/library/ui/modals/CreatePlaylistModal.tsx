@@ -314,7 +314,7 @@ export default function CreatePlaylistModal() {
                 <button
                   type="button"
                   onClick={() => setSpotifyModalOpen(true)}
-                  className="flex h-[42px] w-[42px] items-center justify-center rounded-item bg-fill hover:bg-fill-hover text-[#1ED760] transition-colors border-none cursor-pointer shrink-0"
+                  className="flex h-[42px] w-[42px] items-center justify-center rounded-item bg-fill hover:bg-fill-hover text-text-primary transition-colors border-none cursor-pointer shrink-0"
                   title={t("settings.spotify.my_playlists") || "Playlists do Spotify"}
                 >
                   <SpotifyFill size={20} />

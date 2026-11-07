@@ -688,7 +688,7 @@
         "description": "Utiliza sua sessão do Spotify para carregar todas as músicas de playlists longas (mais de 100 músicas) sem limitações."
       },
       "sign_out": "Desconectar",
-      "sign_in": "Entrar com Spotify",
+      "sign_in": "Entrar",
       "signed_out_title": "Não conectado",
       "signed_out_description": "Conecte sua conta do Spotify para sincronizar playlists e curtidas",
       "sync_now": "Sincronizar agora",
