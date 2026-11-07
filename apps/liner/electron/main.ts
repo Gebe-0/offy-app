@@ -246,18 +246,22 @@ const MIN_WINDOW_WIDTH = 1100;
 const MIN_WINDOW_HEIGHT = 705;
 
 function createWindow() {
+  const isInstallerArg =
+    process.argv.includes("--installer") || process.argv.includes("--setup");
+
   mainWindow = new BrowserWindow({
     title: "OFFY",
     icon: path.join(process.env.VITE_PUBLIC!, "icon.png"),
-    width: DEFAULT_WINDOW_WIDTH,
-    height: DEFAULT_WINDOW_HEIGHT,
-    minWidth: MIN_WINDOW_WIDTH,
-    minHeight: MIN_WINDOW_HEIGHT,
+    width: isInstallerArg ? 840 : DEFAULT_WINDOW_WIDTH,
+    height: isInstallerArg ? 660 : DEFAULT_WINDOW_HEIGHT,
+    minWidth: isInstallerArg ? 720 : MIN_WINDOW_WIDTH,
+    minHeight: isInstallerArg ? 540 : MIN_WINDOW_HEIGHT,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
     hasShadow: false,
-    fullscreenable: true,
+    fullscreenable: !isInstallerArg,
+    resizable: !isInstallerArg,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -430,7 +434,10 @@ function createWindow() {
   attachZoomControls(mainWindow, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
 
   if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    const devUrl = isInstallerArg
+      ? `${process.env.VITE_DEV_SERVER_URL}#/installer`
+      : process.env.VITE_DEV_SERVER_URL;
+    mainWindow.loadURL(devUrl);
   } else {
     bundleManager = new BundleManager({
       defaultRendererDist: RENDERER_DIST,
@@ -441,7 +448,15 @@ function createWindow() {
     void (async () => {
       if (app.isPackaged)
         await manager.updateBeforeLaunch().catch(() => undefined);
-      if (!win.isDestroyed()) win.loadFile(manager.getEffectiveIndexPath());
+      if (!win.isDestroyed()) {
+        if (isInstallerArg) {
+          win.loadFile(manager.getEffectiveIndexPath(), {
+            hash: "/installer",
+          });
+        } else {
+          win.loadFile(manager.getEffectiveIndexPath());
+        }
+      }
     })();
   }
 
@@ -647,6 +662,27 @@ if (!gotTheLock) {
     ipcMain.handle("window:close", () => {
       mainWindow?.close();
     });
+
+    ipcMain.handle(
+      "window:set-size",
+      (
+        _event,
+        {
+          width,
+          height,
+          resizable = true,
+        }: { width: number; height: number; resizable?: boolean },
+      ) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.setResizable(true);
+        mainWindow.setSize(width, height);
+        mainWindow.center();
+        mainWindow.setResizable(resizable);
+        if (resizable) {
+          mainWindow.setFullScreenable(true);
+        }
+      },
+    );
 
     ipcMain.handle("window:is-maximized", () => {
       return mainWindow?.isMaximized() ?? false;

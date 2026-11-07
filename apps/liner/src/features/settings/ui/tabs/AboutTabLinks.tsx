@@ -1,9 +1,11 @@
-import { Book2, QuestionCircle } from "@solar-icons/react";
+import { Book2, QuestionCircle, SettingsMinimalistic } from "@solar-icons/react";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "@/shared/ui";
 import { useTranslation } from "@/languages";
 
 export function AboutTabLinks() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const handleOpenDocs = () => {
     const url = "https://github.com/Gebe-0/offy-app/blob/main/DOCUMENTATION.md";
@@ -39,6 +41,15 @@ export function AboutTabLinks() {
           {t("settings.support") || "Suporte"}:{" "}
           <strong className="text-[#939aff] font-mono">@arlw_</strong>
         </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => navigate("/installer")}
+        className="inline-flex items-center gap-[7px] px-[13px] py-[8px] rounded-item bg-fill hover:bg-fill-hover border border-border-white-alpha-14 text-[13px] font-[500] text-text-primary cursor-pointer transition-colors"
+      >
+        <SettingsMinimalistic size={16} className="text-purple-400" />
+        <span>Assistente de Instalação</span>
       </button>
     </div>
   );
