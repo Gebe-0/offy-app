@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // the player feature pulls lottie/canvas ui that jsdom cannot load; initialize() never touches it
-const player = vi.hoisted(() => ({ stopAndClear: vi.fn(async () => {}) }));
-vi.mock("@/features/player", () => ({ playerEngine: player }));
+const player = vi.hoisted(() => ({
+  stopAndClear: vi.fn(async () => {}),
+  setJamBridge: vi.fn(),
+}));
+vi.mock("@/features/player", () => ({
+  playerEngine: player,
+  usePlayerStore: { getState: vi.fn(() => ({})), subscribe: vi.fn() },
+}));
 
 import { useAuthStore } from "./authStore";
 import {

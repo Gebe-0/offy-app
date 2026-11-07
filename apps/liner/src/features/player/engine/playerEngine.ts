@@ -50,10 +50,10 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 export { usePlayerStore, type PlayerStatus, type RepeatMode, type PlayerState };
 
 export interface JamPlaybackBridge {
-  getNextTrack: () => Track | null | undefined;
-  onTrackConsumed: (trackId: string) => void;
   canControlPlayback: () => boolean;
   isHost: () => boolean;
+  onSkipNext?: () => void;
+  onSkipPrevious?: () => void;
 }
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -740,16 +740,15 @@ class PlayerEngine {
       if (isAutoEnd && !this.jamBridge.isHost()) {
         return;
       }
-      const nextJamTrack = this.jamBridge.getNextTrack();
-      if (nextJamTrack) {
-        this.jamBridge.onTrackConsumed(nextJamTrack.id);
-        void this.playTrack(nextJamTrack, [nextJamTrack], "jam");
-        return;
-      }
     }
 
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
+
+    if (nextIndex === null && this.jamBridge && !isAutoEnd) {
+      this.jamBridge.onSkipNext?.();
+      return;
+    }
 
     if (
       nextIndex === null &&
@@ -810,13 +809,18 @@ class PlayerEngine {
       return;
     }
     const store = usePlayerStore.getState();
-    if (store.queue.length === 0) return;
 
     // If playback is > 3 seconds, standard player behavior restarts the track
     if (store.positionMs > 3000) {
       this.seek(0);
       return;
     }
+
+    if (store.queue.length <= 1 && this.jamBridge) {
+      this.jamBridge.onSkipPrevious?.();
+      return;
+    }
+    if (store.queue.length === 0) return;
 
     const prevIndex =
       store.currentIndex > 0

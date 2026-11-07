@@ -372,7 +372,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const body = (request.body ?? {}) as {
-        action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE";
+        action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE" | "SKIP_NEXT" | "SKIP_PREV";
         track?: unknown;
         positionMs?: number;
       };

@@ -20,7 +20,6 @@ export default function JamModal() {
     isConnecting,
     error,
     allowGuestControl,
-    queue,
     participants,
     shareUrl,
     jamDeepLink,
@@ -28,15 +27,11 @@ export default function JamModal() {
     joinJam,
     leaveJam,
     updateSettings,
-    removeFromQueue,
   } = useJamStore();
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
 
   const [tab, setTab] = useState<"create" | "join">("create");
-  const [activeTab, setActiveTab] = useState<"participants" | "queue">(
-    "participants",
-  );
   const [inputCode, setInputCode] = useState("");
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -246,35 +241,19 @@ export default function JamModal() {
               </div>
             )}
 
-            {/* Abas Participantes / Fila */}
-            <div className="flex p-[3px] rounded-item bg-fill">
-              <button
-                type="button"
-                onClick={() => setActiveTab("participants")}
-                className={`flex-1 h-[30px] rounded-[8px] text-[13px] font-[500] transition-all cursor-pointer border-none ${
-                  activeTab === "participants"
-                    ? "bg-fill-hover text-text-primary font-semibold"
-                    : "bg-transparent text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                Participantes ({participants.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("queue")}
-                className={`flex-1 h-[30px] rounded-[8px] text-[13px] font-[500] transition-all cursor-pointer border-none ${
-                  activeTab === "queue"
-                    ? "bg-fill-hover text-text-primary font-semibold"
-                    : "bg-transparent text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                Fila da Jam ({queue.length})
-              </button>
-            </div>
-
-            {activeTab === "participants" ? (
-              /* Lista de Participantes */
-              <div className="max-h-[150px] overflow-y-auto flex flex-col gap-[6px] pr-[4px]">
+            {/* Lista de Participantes */}
+            <div className="flex flex-col gap-[8px]">
+              <div className="flex items-center justify-between px-[2px]">
+                <span className="text-[12px] font-semibold text-text-secondary uppercase tracking-wider">
+                  Participantes ({participants.length})
+                </span>
+                {currentTrack && (
+                  <span className="text-[11.5px] text-emerald-400 font-medium truncate max-w-[220px]">
+                    Tocando: {currentTrack.title}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-[180px] overflow-y-auto flex flex-col gap-[6px] pr-[4px]">
                 {participants.map((p) => (
                   <div
                     key={p.userId}
@@ -296,72 +275,7 @@ export default function JamModal() {
                   </div>
                 ))}
               </div>
-            ) : (
-              /* Fila da Jam */
-              <div className="flex flex-col gap-[8px] max-h-[170px] overflow-y-auto pr-[4px]">
-                {currentTrack && (
-                  <div className="flex items-center gap-[10px] p-[8px] rounded-[10px] bg-emerald-500/10 border border-emerald-500/20">
-                    {currentTrack.coverUrl && (
-                      <img
-                        src={currentTrack.coverUrl}
-                        alt=""
-                        className="w-[34px] h-[34px] rounded-[6px] object-cover"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] uppercase font-bold text-emerald-400 tracking-wider">
-                        Tocando agora
-                      </div>
-                      <div className="text-[13px] font-semibold text-text-primary truncate">
-                        {currentTrack.title}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {queue.length === 0 ? (
-                  <div className="py-[16px] text-center text-[13px] text-text-secondary/70">
-                    A fila da Jam está vazia. Adicione músicas clicando no menu
-                    de qualquer faixa.
-                  </div>
-                ) : (
-                  queue.map((track, i) => (
-                    <div
-                      key={`${track.id}-${i}`}
-                      className="flex items-center justify-between gap-[8px] p-[8px] rounded-[10px] bg-fill"
-                    >
-                      <div className="flex items-center gap-[8px] min-w-0">
-                        {track.coverUrl && (
-                          <img
-                            src={track.coverUrl}
-                            alt=""
-                            className="w-[32px] h-[32px] rounded-[6px] object-cover"
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <div className="text-[12.5px] font-medium text-text-primary truncate">
-                            {track.title}
-                          </div>
-                          <div className="text-[11.5px] text-text-secondary truncate">
-                            {track.artists}
-                          </div>
-                        </div>
-                      </div>
-                      {(isHost || allowGuestControl) && (
-                        <button
-                          type="button"
-                          onClick={() => void removeFromQueue(track.id)}
-                          className="text-[12px] text-text-secondary hover:text-red-400 p-[4px] bg-transparent border-none cursor-pointer"
-                          title="Remover da fila"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
+            </div>
 
             {/* Ações */}
             <DialogActions className="mt-[6px]">

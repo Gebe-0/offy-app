@@ -24,7 +24,7 @@ export interface JamRoomState {
 }
 
 export interface JamSyncEvent {
-  action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE";
+  action: "PLAY" | "PAUSE" | "SEEK" | "TRACK_CHANGE" | "SKIP_NEXT" | "SKIP_PREV";
   track?: Track;
   status: "playing" | "paused" | "idle";
   positionMs: number;

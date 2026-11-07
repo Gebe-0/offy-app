@@ -1,4 +1,5 @@
 export { default as LoginPage } from "./ui/LoginPage";
+export { default as LegalModal } from "./ui/LegalModal";
 export {
   default as AuthLock,
   AuthLock as AuthLockComponent,

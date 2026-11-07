@@ -7,6 +7,7 @@ import { EyeLine, EyeCloseLine, ArrowLeftLine } from "@mingcute/react";
 import WindowControls from "@/features/navigation/ui/WindowControls";
 import LoginBrandPanel from "./LoginBrandPanel";
 import LoginBackdrop from "./LoginBackdrop";
+import LegalModal from "./LegalModal";
 import { useWindowState } from "@/features/navigation/hooks/useWindowState";
 import {
   authErrorMessage,
@@ -40,6 +41,8 @@ export default function LoginPage() {
   const [errorField, setErrorField] = useState<
     "username" | "displayName" | null
   >(null);
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<"terms" | "privacy">("terms");
 
   const selectMode = (next: "login" | "register") => {
     if (submitting || next === mode) return;
@@ -600,30 +603,37 @@ export default function LoginPage() {
           {/* Bottom: legal warning */}
           <p className="m-0 shrink-0 text-center text-[11px] leading-[1.5] text-text-tertiary">
             {t("login.legal")}{" "}
-            <a
-              href="#"
-              onClick={(e) => e.preventDefault()}
-              target="_blank"
-              rel="noreferrer"
-              className="text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                setLegalTab("terms");
+                setLegalOpen(true);
+              }}
+              className="p-0 border-none bg-transparent cursor-pointer text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"
             >
               {t("login.legal_tos")}
-            </a>{" "}
+            </button>{" "}
             {t("login.legal_and")}{" "}
-            <a
-              href="#"
-              onClick={(e) => e.preventDefault()}
-              target="_blank"
-              rel="noreferrer"
-              className="text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                setLegalTab("privacy");
+                setLegalOpen(true);
+              }}
+              className="p-0 border-none bg-transparent cursor-pointer text-text-secondary underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary rounded-xs transition-colors"
             >
               {t("login.legal_pp")}
-            </a>
+            </button>
             .
           </p>
         </div>
       </section>
       <HumanCheckNotice />
+      <LegalModal
+        open={legalOpen}
+        onOpenChange={setLegalOpen}
+        initialTab={legalTab}
+      />
     </main>
   );
 }
