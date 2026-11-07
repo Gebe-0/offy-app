@@ -13,6 +13,7 @@ export {
   reloadLikedTracks,
 } from "./useLikedTracks";
 export { useYoutubeLibraryItems } from "./useYoutubeLibraryItems";
+export { useSpotifyLibraryItems } from "./useSpotifyLibraryItems";
 export { useIsTrackLiked } from "./useIsTrackLiked";
 export {
   useAddPlaylistTracks,

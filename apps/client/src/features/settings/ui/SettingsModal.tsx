@@ -4,6 +4,7 @@ import {
   CloseLine,
   DiscordFill,
   KeyboardFill,
+  SpotifyFill,
   YoutubeFill,
 } from "@mingcute/react";
 import {
@@ -27,6 +28,7 @@ import {
   OverlayTab,
   DiscordTab,
   YoutubeTab,
+  SpotifyTab,
 } from "./tabs";
 import { SettingsSidebar, type SettingsNavIconProps } from "./SettingsSidebar";
 
@@ -36,6 +38,7 @@ type TabId =
   | "Overlay"
   | "Discord"
   | "Youtube"
+  | "Spotify"
   | "Appearance"
   | "Storage"
   | "About";
@@ -46,6 +49,7 @@ const TAB_ICONS: Record<TabId, React.ComponentType<SettingsNavIconProps>> = {
   Overlay: Widget5,
   Discord: DiscordFill,
   Youtube: YoutubeFill,
+  Spotify: SpotifyFill,
   Appearance: Palette,
   Storage: Database,
   About: InfoCircle,
@@ -56,7 +60,7 @@ type TabGroupKey = "player" | "interface" | "integrations" | "application";
 const TAB_GROUPS: { labelKey: TabGroupKey; ids: TabId[] }[] = [
   { labelKey: "player", ids: ["Playback", "Shortcuts"] },
   { labelKey: "interface", ids: ["Appearance", "Overlay"] },
-  { labelKey: "integrations", ids: ["Youtube", "Discord"] },
+  { labelKey: "integrations", ids: ["Youtube", "Spotify", "Discord"] },
   { labelKey: "application", ids: ["Storage", "About"] },
 ];
 
@@ -203,6 +207,21 @@ const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
     titleKey: "settings.youtube.sync_library.title",
     descKey: "settings.youtube.sync_library.description",
   },
+  {
+    tabId: "Spotify",
+    titleKey: "settings.spotify.sync_likes.title",
+    descKey: "settings.spotify.sync_likes.description",
+  },
+  {
+    tabId: "Spotify",
+    titleKey: "settings.spotify.sync_library.title",
+    descKey: "settings.spotify.sync_library.description",
+  },
+  {
+    tabId: "Spotify",
+    titleKey: "settings.spotify.full_import.title",
+    descKey: "settings.spotify.full_import.description",
+  },
 
   // Appearance
   {
@@ -257,6 +276,7 @@ export default function SettingsModal() {
     Overlay: t("settings.tabs.overlay") || "Overlay",
     Discord: t("settings.tabs.discord") || "Discord RPC",
     Youtube: t("settings.tabs.youtube") || "YouTube",
+    Spotify: t("settings.tabs.spotify") || "Spotify",
     Appearance: t("settings.tabs.appearance"),
     Storage: t("settings.tabs.storage"),
     About: t("settings.tabs.about"),
@@ -276,6 +296,9 @@ export default function SettingsModal() {
     Youtube:
       t("settings.youtube.description") ||
       "Sign in to your YouTube account to prevent playback errors.",
+    Spotify:
+      t("settings.spotify.description") ||
+      "Conecte sua conta do Spotify para sincronizar playlists e curtidas.",
     Appearance: t("settings.theme.description"),
     Storage: t("settings.storage.description"),
     About: t("settings.about.tagline"),
@@ -292,6 +315,7 @@ export default function SettingsModal() {
       Overlay: "settings.tabs.overlay",
       Discord: "settings.tabs.discord",
       Youtube: "settings.tabs.youtube",
+      Spotify: "settings.tabs.spotify",
       Appearance: "settings.theme.title",
       Storage: "settings.tabs.storage",
       About: "settings.tabs.about",
@@ -303,6 +327,7 @@ export default function SettingsModal() {
       Overlay: "settings.overlay.description",
       Discord: "settings.discord.description",
       Youtube: "settings.youtube.description",
+      Spotify: "settings.spotify.description",
       Appearance: "settings.theme.description",
       Storage: "settings.storage.description",
       About: "settings.about.tagline",
@@ -425,6 +450,9 @@ export default function SettingsModal() {
               )}
               {activeTab === "Youtube" && (
                 <YoutubeTab searchQuery={searchQuery} />
+              )}
+              {activeTab === "Spotify" && (
+                <SpotifyTab searchQuery={searchQuery} />
               )}
               {activeTab === "Appearance" && (
                 <AppearanceTab searchQuery={searchQuery} />

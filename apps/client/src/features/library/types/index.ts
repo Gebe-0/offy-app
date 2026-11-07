@@ -2,7 +2,7 @@ export type LibraryTab = "all" | "playlists" | "albums" | "artists";
 
 export type LibraryItemKind = "playlist" | "album" | "artist";
 
-export type LibraryItemSource = "youtube";
+export type LibraryItemSource = "youtube" | "spotify";
 
 export interface LibraryItemViewModel {
   id: string;
