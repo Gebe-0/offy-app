@@ -89,7 +89,7 @@ export default function SpotifyPlaylistsModal({
 
         {!signedIn ? (
           <div className="flex flex-col items-center justify-center gap-[12px] py-[28px] text-center">
-            <div className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-[#1ED760]/10 text-[#1ED760]">
+            <div className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-fill text-text-primary">
               <SpotifyFill size={28} />
             </div>
             <div className="flex flex-col gap-[4px]">
@@ -105,10 +105,10 @@ export default function SpotifyPlaylistsModal({
               type="button"
               disabled={authLoading}
               onClick={() => void signIn()}
-              className="mt-[6px] flex items-center justify-center gap-[8px] px-[20px] py-[8px] rounded-item bg-[#1ED760] text-black font-semibold text-[13px] hover:bg-[#1db954] transition-colors cursor-pointer border-none"
+              className="mt-[6px] flex items-center justify-center gap-[8px] px-[20px] py-[8px] rounded-item bg-text-primary/85 text-bg-primary hover:bg-text-primary font-medium text-[13px] transition-colors cursor-pointer border-none"
             >
               <SpotifyFill size={18} />
-              <span>{t("settings.spotify.sign_in") || "Entrar com Spotify"}</span>
+              <span>{t("settings.spotify.sign_in") || "Entrar"}</span>
             </button>
           </div>
         ) : (

@@ -78,7 +78,7 @@ export function SpotifyTab({ searchQuery }: { searchQuery?: string }) {
             "Cria e sincroniza suas músicas curtidas em uma playlist dedicada 'Músicas Curtidas (Spotify)'."
           }
           explained
-          icon={<HeartFill size={20} className="text-[#1ED760]" />}
+          icon={<HeartFill size={20} />}
           titleKey="settings.spotify.sync_likes.title"
           descKey="settings.spotify.sync_likes.description"
           searchQuery={searchQuery}
