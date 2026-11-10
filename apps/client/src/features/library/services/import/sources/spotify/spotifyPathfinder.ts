@@ -19,7 +19,7 @@ import { rethrowIfAborted } from "@/shared/utils/abort";
 import { log } from "@/shared/utils/logger";
 
 const SPOTIFY_PATHFINDER_HASH =
-  "86dde7b9d9356e2369414647cf6950cfed96e778e129cfdfc99aea6c1613b3b0";
+  "21ea11a6ac75a5f3e01fd365d29c18e0a4a8b7dc09f89bbb5d73910190c6acaf";
 const PAGE_LIMIT = 100;
 const MAX_PAGES = 60;
 const PAGE_ATTEMPTS = 3;

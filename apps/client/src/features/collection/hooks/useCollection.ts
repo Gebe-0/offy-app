@@ -3,6 +3,8 @@ import { api, mediaUrl, toClientTrack } from "@/shared/api";
 import { queryCache } from "@/shared/cache/queryCache";
 import type { Track } from "@/shared/types";
 import { YOUTUBE_THUMBNAIL_HOST } from "@/shared/youtube";
+import { fetchSpotifyTracksWithAccount } from "@/shared/spotify";
+import { findCatalogMatch } from "@/shared/media/matching";
 import { getDailyMixArtists } from "@/features/home/hooks/useDailyMixes";
 
 export interface CollectionPageData {
@@ -29,6 +31,49 @@ async function loadCollection(
     decodedId.startsWith("mix-") ||
     id.startsWith("daily-mix") ||
     id.startsWith("mix-");
+
+  if (type === "playlist" && decodedId.startsWith("spotify:")) {
+    const spotifyId = decodedId.slice("spotify:".length).trim();
+    const res = await fetchSpotifyTracksWithAccount(spotifyId);
+    const items = res.tracks || [];
+    const matched: (Track | null)[] = new Array(items.length).fill(null);
+    let cursor = 0;
+    const concurrency = Math.min(6, items.length);
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        while (cursor < items.length) {
+          const idx = cursor++;
+          const src = items[idx];
+          try {
+            const outcome = await findCatalogMatch(src);
+            const rawTrack =
+              outcome.status === "approved"
+                ? outcome.track
+                : outcome.proposedTrack;
+            if (rawTrack) {
+              const client = toClientTrack(rawTrack);
+              matched[idx] = {
+                ...client,
+                coverUrl: src.coverUrl || client.coverUrl,
+              };
+            }
+          } catch {
+            // ignore failed track match
+          }
+        }
+      }),
+    );
+
+    const resolvedTracks = matched.filter((t): t is Track => Boolean(t));
+    return {
+      type: "playlist",
+      title: res.title || "Playlist do Spotify",
+      author: "Spotify",
+      description: res.description,
+      coverUrl: res.coverUrl || items[0]?.coverUrl || "",
+      tracks: resolvedTracks,
+    };
+  }
 
   if (type === "playlist" && isDailyMix) {
     const mixesRes = await api.getDailyMixes();

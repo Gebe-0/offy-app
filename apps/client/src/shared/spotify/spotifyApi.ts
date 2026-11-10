@@ -51,6 +51,9 @@ export async function fetchSpotifyTracksWithAccount(
 ): Promise<{
   tracks: SpotifyTrackItem[];
   total: number;
+  title?: string;
+  description?: string;
+  coverUrl?: string;
 }> {
   if (typeof window === "undefined" || !window.linerElectron?.spotifyAuth) {
     return { tracks: [], total: 0 };

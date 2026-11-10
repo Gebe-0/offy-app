@@ -112,7 +112,10 @@ export async function importSpotify(
         return {
           source: "spotify",
           sourceUrl: rawUrl,
-          title: defaultTitle(entityType),
+          title: accountResult.title || defaultTitle(entityType),
+          ...(accountResult.description
+            ? { description: accountResult.description }
+            : {}),
           tracks: accountResult.tracks.map((t) => ({
             sourceId: t.sourceId,
             title: t.title,

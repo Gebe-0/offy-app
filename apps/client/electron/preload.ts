@@ -55,6 +55,9 @@ export interface SpotifyAuthApi {
       coverUrl?: string;
     }>;
     total: number;
+    title?: string;
+    description?: string;
+    coverUrl?: string;
   }>;
   getLikedTracks: () => Promise<{
     tracks: Array<{

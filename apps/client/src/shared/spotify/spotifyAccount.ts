@@ -29,15 +29,30 @@ export async function initSpotifyAuth(): Promise<SpotifyAccount | null> {
   try {
     const session = await window.linerElectron?.spotifyAuth?.getSession();
     if (session?.account) {
-      cachedAccount = session.account;
+      const prev = cachedAccount;
+      const next = session.account;
+      const changed =
+        !prev ||
+        prev.id !== next.id ||
+        prev.name !== next.name ||
+        prev.photoUrl !== next.photoUrl ||
+        prev.product !== next.product;
+      cachedAccount = next;
       isInitialized = true;
-      return session.account;
+      if (changed) {
+        notifyAuthChanged();
+      }
+      return next;
     }
   } catch {
     // electron not available or error
   }
+  const hadAccount = Boolean(cachedAccount);
   cachedAccount = null;
   isInitialized = true;
+  if (hadAccount) {
+    notifyAuthChanged();
+  }
   return null;
 }
 

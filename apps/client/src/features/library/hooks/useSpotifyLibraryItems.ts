@@ -22,7 +22,7 @@ function toLibraryItem(
     subtitle: `${playlist.trackCount} faixas • Spotify`,
     imageUrl: playlist.imageUrl,
     kind: "playlist",
-    href: `/collection?type=playlist&id=${encodeURIComponent(playlist.id)}`,
+    href: `/collection?type=playlist&id=${encodeURIComponent(`spotify:${playlist.id}`)}`,
     addedAt: new Date(SPOTIFY_ORDER_ORIGIN - index).toISOString(),
     isOwned: false,
     source: "spotify",
