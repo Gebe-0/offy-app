@@ -64,13 +64,62 @@ export async function finalizeImportedPlaylist(
   description: string | undefined,
   tracks: Track[],
 ): Promise<FinalizedPlaylist> {
-  const playlist = await api.createPlaylist({
-    title: title.trim().slice(0, 200) || "Imported playlist",
-    ...(description?.trim()
-      ? { description: description.trim().slice(0, 2000) }
-      : {}),
+  const cleanTitle = title.trim().slice(0, 200) || "Imported playlist";
+  let playlistId: string;
+  const existingTrackIds = new Set<string>();
+  const existingFingerprints = new Set<string>();
+
+  try {
+    const existingList = await api.listPlaylists();
+    const existing = existingList.items?.find(
+      (p) => p.title.trim().toLowerCase() === cleanTitle.toLowerCase(),
+    );
+
+    if (existing) {
+      playlistId = existing.id;
+      try {
+        const detail = await api.getUserPlaylist(existing.id);
+        if (Array.isArray(detail?.items)) {
+          for (const item of detail.items) {
+            if (item.track?.id) existingTrackIds.add(item.track.id);
+            const artistNames = (item.track?.artists || [])
+              .map((a: any) => a.name)
+              .join(", ");
+            const fp = `${item.track?.title || ""} - ${artistNames}`.toLowerCase().trim();
+            if (fp) existingFingerprints.add(fp);
+          }
+        }
+      } catch {
+        // ignore detail read error
+      }
+    } else {
+      const created = await api.createPlaylist({
+        title: cleanTitle,
+        ...(description?.trim()
+          ? { description: description.trim().slice(0, 2000) }
+          : {}),
+      });
+      playlistId = created.id;
+    }
+  } catch {
+    const created = await api.createPlaylist({
+      title: cleanTitle,
+      ...(description?.trim()
+        ? { description: description.trim().slice(0, 2000) }
+        : {}),
+    });
+    playlistId = created.id;
+  }
+
+  // Deduplicate against existing tracks in the playlist
+  const unique = uniqueTracks(tracks).filter((t) => {
+    if (existingTrackIds.has(t.id)) return false;
+    const artistNames = (t.artists || []).map((a) => a.name).join(", ");
+    const fp = `${t.title || ""} - ${artistNames}`.toLowerCase().trim();
+    if (fp && existingFingerprints.has(fp)) return false;
+    return true;
   });
-  const unique = uniqueTracks(tracks);
-  const saved = unique.length > 0 ? await addTracks(playlist.id, unique) : 0;
-  return { playlistId: playlist.id, saved };
+
+  const saved = unique.length > 0 ? await addTracks(playlistId, unique) : 0;
+  return { playlistId, saved };
 }

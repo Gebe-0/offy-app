@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Track } from "@offy/contracts";
 import { sql } from "../db.js";
 import { ApiError, decodeCursor, encodeCursor, int, iso, requireUserId, sendError } from "../http.js";
-import { ensureTrack, rowToTrack, upsertTrack } from "../tracks.js";
+import { ensureTrack, rowToTrack } from "../tracks.js";
 
 const COLLECTION_TYPES = new Set(["albums", "artists", "playlists"]);
 

@@ -7,8 +7,24 @@ export interface SpotifyAccount {
 }
 
 const AUTH_CHANGED_EVENT = "spotify-auth:changed";
+const HAS_SESSION_STORAGE_KEY = "offy:spotify:has-session";
+const ACCOUNT_STORAGE_KEY = "offy:spotify:cached-account";
 
-let cachedAccount: SpotifyAccount | null | undefined;
+function loadInitialAccount(): SpotifyAccount | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.id === "string") {
+        return parsed as SpotifyAccount;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+let cachedAccount: SpotifyAccount | null | undefined = loadInitialAccount();
 let isInitialized = false;
 
 function notifyAuthChanged(): void {
@@ -29,6 +45,13 @@ export async function initSpotifyAuth(): Promise<SpotifyAccount | null> {
   try {
     const session = await window.linerElectron?.spotifyAuth?.getSession();
     if (session?.account) {
+      try {
+        localStorage.setItem(HAS_SESSION_STORAGE_KEY, "true");
+        localStorage.setItem(
+          ACCOUNT_STORAGE_KEY,
+          JSON.stringify(session.account),
+        );
+      } catch {}
       const prev = cachedAccount;
       const next = session.account;
       const changed =
@@ -43,17 +66,27 @@ export async function initSpotifyAuth(): Promise<SpotifyAccount | null> {
         notifyAuthChanged();
       }
       return next;
+    } else if (session === null && window.linerElectron?.spotifyAuth) {
+      // Electron explicitly confirmed that no session exists on disk/partition
+      try {
+        localStorage.removeItem(HAS_SESSION_STORAGE_KEY);
+        localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+      } catch {}
+      const hadAccount = Boolean(cachedAccount);
+      cachedAccount = null;
+      isInitialized = true;
+      if (hadAccount) {
+        notifyAuthChanged();
+      }
+      return null;
     }
-  } catch {
-    // electron not available or error
+  } catch (err) {
+    // Preserve local cached account on offline or transient startup errors
+    console.warn("[spotify] session check encountered temporary error:", err);
   }
-  const hadAccount = Boolean(cachedAccount);
-  cachedAccount = null;
+
   isInitialized = true;
-  if (hadAccount) {
-    notifyAuthChanged();
-  }
-  return null;
+  return cachedAccount ?? null;
 }
 
 export function getCachedSpotifyAccount(): SpotifyAccount | null {
@@ -64,6 +97,16 @@ export function getCachedSpotifyAccount(): SpotifyAccount | null {
 }
 
 export function isSpotifySignedIn(): boolean {
+  if (cachedAccount) return true;
+  if (!isInitialized && typeof window !== "undefined") {
+    try {
+      if (localStorage.getItem(HAS_SESSION_STORAGE_KEY) === "true") {
+        void initSpotifyAuth();
+        return true;
+      }
+    } catch {}
+    void initSpotifyAuth();
+  }
   return Boolean(getCachedSpotifyAccount());
 }
 
@@ -80,6 +123,13 @@ export async function signInWithSpotify(): Promise<{
   try {
     const result = await window.linerElectron.spotifyAuth.login();
     if (result.success && result.session?.account) {
+      try {
+        localStorage.setItem(HAS_SESSION_STORAGE_KEY, "true");
+        localStorage.setItem(
+          ACCOUNT_STORAGE_KEY,
+          JSON.stringify(result.session.account),
+        );
+      } catch {}
       cachedAccount = result.session.account;
       isInitialized = true;
       notifyAuthChanged();
@@ -97,6 +147,10 @@ export async function signInWithSpotify(): Promise<{
 }
 
 export async function signOutSpotify(): Promise<boolean> {
+  try {
+    localStorage.removeItem(HAS_SESSION_STORAGE_KEY);
+    localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+  } catch {}
   if (typeof window === "undefined" || !window.linerElectron?.spotifyAuth) {
     cachedAccount = null;
     notifyAuthChanged();

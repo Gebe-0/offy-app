@@ -36,7 +36,7 @@ async function loadCollection(
     const spotifyId = decodedId.slice("spotify:".length).trim();
     const res = await fetchSpotifyTracksWithAccount(spotifyId);
     const items = res.tracks || [];
-    const matched: (Track | null)[] = new Array(items.length).fill(null);
+    const matched: (Track | null)[] = Array.from<Track | null>({ length: items.length }).fill(null);
     let cursor = 0;
     const concurrency = Math.min(6, items.length);
     await Promise.all(

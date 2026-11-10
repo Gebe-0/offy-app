@@ -1,4 +1,4 @@
-import type { AudioFormat, PlaybackStream } from "./formats.js";
+import type { PlaybackStream } from "./formats.js";
 import { postInnertube } from "./client.js";
 import {
   extractAudioFormats,

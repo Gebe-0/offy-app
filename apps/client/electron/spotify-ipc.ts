@@ -4,7 +4,6 @@ import {
   app,
   BrowserWindow,
   ipcMain,
-  net,
   safeStorage,
   session,
   type IpcMainEvent,
@@ -85,7 +84,7 @@ async function refreshSpotifyTotpSecret(): Promise<void> {
   if (Date.now() - lastTotpSecretRefreshAt < 5 * 60_000) return;
   lastTotpSecretRefreshAt = Date.now();
   try {
-    const htmlRes = await net.fetch("https://open.spotify.com/", {
+    const htmlRes = await fetch("https://open.spotify.com/", {
       headers: { "User-Agent": CHROME_USER_AGENT },
     });
     if (!htmlRes.ok) return;
@@ -95,7 +94,7 @@ async function refreshSpotifyTotpSecret(): Promise<void> {
         /https:\/\/open\.spotifycdn\.com\/cdn\/build\/web-player\/web-player\.[a-f0-9]+\.js/g,
       ) || [];
     for (const url of scriptUrls) {
-      const jsRes = await net.fetch(url, {
+      const jsRes = await fetch(url, {
         headers: { "User-Agent": CHROME_USER_AGENT },
       });
       if (!jsRes.ok) continue;
@@ -173,7 +172,7 @@ export function registerSpotifyIpc(): {
   };
 
   const deps: AuthSessionStoreDeps = {
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: (url, init) => fetch(url, init),
     syncClock: () => {},
   };
 
@@ -208,18 +207,148 @@ export function registerSpotifyIpc(): {
     },
   );
 
+  // Persist sp_dc cookie into Chromium cookie store with 10-year expiration
+  async function persistSpDcCookie(spDc: string): Promise<void> {
+    if (!spDc) return;
+    const farFuture = Math.floor(Date.now() / 1000) + 3600 * 24 * 365 * 10;
+    try {
+      await spSession.cookies.set({
+        url: "https://open.spotify.com",
+        name: "sp_dc",
+        value: spDc,
+        domain: ".spotify.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        expirationDate: farFuture,
+        sameSite: "no_restriction",
+      });
+    } catch (err) {
+      console.warn("[spotify] failed to persist sp_dc cookie:", err);
+    }
+  }
+
+  function commitSpotifySession(sessionData: StoredSpotifySession): void {
+    const safeSession: StoredSpotifySession = {
+      ...sessionData,
+      accessToken: sessionData.accessToken || "spotify-persisted-token",
+      refreshToken:
+        sessionData.spDc ||
+        sessionData.refreshToken ||
+        "spotify-persisted-spdc",
+      spDc: sessionData.spDc || sessionData.refreshToken,
+    };
+    store.set(safeSession as unknown as Record<string, unknown>);
+    if (safeSession.spDc) {
+      void persistSpDcCookie(safeSession.spDc);
+    }
+  }
+
+  // Headless background window to catch official Bearer token if API token extraction fails
+  async function refreshBearerViaHeadlessWeb(): Promise<string | null> {
+    if (activeLoginWindow && !activeLoginWindow.isDestroyed()) return null;
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      const cleanup = (token: string | null) => {
+        if (resolved) return;
+        resolved = true;
+        if (!bgWindow.isDestroyed()) {
+          bgWindow.destroy();
+        }
+        resolve(token);
+      };
+
+      const timeout = setTimeout(() => {
+        cleanup(capturedBearerToken);
+      }, 12_000);
+
+      const bgWindow = new BrowserWindow({
+        show: false,
+        width: 300,
+        height: 300,
+        webPreferences: {
+          partition: "persist:spotify",
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+
+      bgWindow.webContents.setUserAgent(CHROME_USER_AGENT);
+
+      const checkInterval = setInterval(() => {
+        if (capturedBearerToken && capturedBearerToken.startsWith("BQ")) {
+          clearInterval(checkInterval);
+          clearTimeout(timeout);
+          cleanup(capturedBearerToken);
+        }
+      }, 400);
+
+      bgWindow.webContents.on("did-fail-load", () => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        cleanup(capturedBearerToken);
+      });
+
+      bgWindow.loadURL("https://open.spotify.com/").catch(() => {
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
+        cleanup(capturedBearerToken);
+      });
+    });
+  }
+
+  async function resurrectSessionFromCookies(): Promise<StoredSpotifySession | null> {
+    try {
+      const cookies = await spSession.cookies.get({ name: "sp_dc" });
+      const cookieSpDc = cookies[0]?.value;
+      if (!cookieSpDc) return null;
+
+      console.log("[spotify] resurrecting session from persistent cookie jar...");
+      const tokenData = await fetchTokenWithSpDc(cookieSpDc);
+      const token = tokenData?.accessToken || capturedBearerToken;
+      if (token) {
+        const profile = await fetchSpotifyUserProfile(token);
+        const resurrected: StoredSpotifySession = {
+          accessToken: token,
+          refreshToken: cookieSpDc,
+          spDc: cookieSpDc,
+          expiresAt: tokenData?.expiresAt ?? Date.now() + 3600_000,
+          account: {
+            id: profile.id || "spotify-user",
+            name: profile.name || "Spotify",
+            email: undefined,
+            photoUrl: profile.photoUrl,
+            product: profile.product || "free",
+          },
+        };
+        commitSpotifySession(resurrected);
+        return resurrected;
+      }
+    } catch (err) {
+      console.warn("[spotify] resurrectSessionFromCookies failed:", err);
+    }
+    return null;
+  }
+
+  // Sync sp_dc cookie to partition cookie store if available or resurrect from cookies
+  const initialSession = store.get() as unknown as StoredSpotifySession | null;
+  if (initialSession?.spDc) {
+    void persistSpDcCookie(initialSession.spDc);
+  } else {
+    void resurrectSessionFromCookies();
+  }
+
   async function requestTokenFromApi(
     spDc: string,
     totpConfig: { secret: string; version: number },
   ): Promise<{ accessToken: string; expiresAt: number } | null> {
     let serverTimeSeconds = Math.floor(Date.now() / 1000);
     try {
-      const stRes = await net.fetch(
-        "https://open.spotify.com/api/server-time",
-        {
-          headers: { "User-Agent": CHROME_USER_AGENT },
-        },
-      );
+      const stRes = await fetch("https://open.spotify.com/api/server-time", {
+        headers: { "User-Agent": CHROME_USER_AGENT },
+      });
       if (stRes.ok) {
         const stJson = (await stRes.json()) as { serverTime?: number };
         if (typeof stJson.serverTime === "number" && stJson.serverTime > 0) {
@@ -238,7 +367,7 @@ export function registerSpotifyIpc(): {
     );
 
     const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${encodeURIComponent(totp)}&totpServer=${encodeURIComponent(totpServer)}&totpVer=${totpConfig.version}`;
-    const res = await net.fetch(tokenUrl, {
+    const res = await fetch(tokenUrl, {
       headers: {
         "User-Agent": CHROME_USER_AGENT,
         Accept: "application/json",
@@ -271,7 +400,18 @@ export function registerSpotifyIpc(): {
       if (firstAttempt) return firstAttempt;
 
       await refreshSpotifyTotpSecret();
-      return await requestTokenFromApi(spDc, cachedTotpSecret);
+      const secondAttempt = await requestTokenFromApi(spDc, cachedTotpSecret);
+      if (secondAttempt) return secondAttempt;
+
+      // Resilient fallback for long idle periods: silent official web player token extraction
+      const headlessToken = await refreshBearerViaHeadlessWeb();
+      if (headlessToken) {
+        return {
+          accessToken: headlessToken,
+          expiresAt: Date.now() + 3600_000,
+        };
+      }
+      return null;
     } catch (err) {
       console.error("[spotify] fetchTokenWithSpDc failed:", err);
       return null;
@@ -292,7 +432,7 @@ export function registerSpotifyIpc(): {
       }),
     });
     const url = `https://api-partner.spotify.com/pathfinder/v1/query?${params.toString()}`;
-    const res = await net.fetch(url, {
+    const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
@@ -357,10 +497,26 @@ export function registerSpotifyIpc(): {
     return result;
   }
 
+  let inFlightTokenRefresh: Promise<string | null> | null = null;
+
   async function getValidToken(forceRefresh = false): Promise<string | null> {
-    const raw = store.get();
-    if (!raw) return null;
-    const current = raw as unknown as StoredSpotifySession;
+    if (inFlightTokenRefresh) {
+      return inFlightTokenRefresh;
+    }
+    const promise = getValidTokenInternal(forceRefresh);
+    inFlightTokenRefresh = promise.finally(() => {
+      inFlightTokenRefresh = null;
+    });
+    return promise;
+  }
+
+  async function getValidTokenInternal(
+    forceRefresh = false,
+  ): Promise<string | null> {
+    const current =
+      (store.get() as unknown as StoredSpotifySession | null) ??
+      (await resurrectSessionFromCookies());
+    if (!current) return null;
 
     const expiresAt = Number(current.expiresAt) || 0;
     if (
@@ -372,39 +528,30 @@ export function registerSpotifyIpc(): {
       return String(current.accessToken);
     }
 
-    const spDc = current.spDc || current.refreshToken;
+    let spDc = current.spDc || current.refreshToken;
+    if (!spDc) {
+      try {
+        const cookies = await spSession.cookies.get({});
+        const found = cookies.find((c) => c.name === "sp_dc")?.value;
+        if (found) spDc = found;
+      } catch {
+        // ignore
+      }
+    }
+
     if (spDc) {
       const tokenData = await fetchTokenWithSpDc(spDc);
       if (tokenData?.accessToken) {
         const updated: StoredSpotifySession = {
           ...current,
+          spDc,
+          refreshToken: spDc,
           accessToken: tokenData.accessToken,
           expiresAt: tokenData.expiresAt,
         };
-        store.set(updated as unknown as Record<string, unknown>);
+        commitSpotifySession(updated);
         return tokenData.accessToken;
       }
-    }
-
-    try {
-      const cookies = await spSession.cookies.get({});
-      const sessionSpDc = cookies.find((c) => c.name === "sp_dc")?.value;
-      if (sessionSpDc) {
-        const tokenData = await fetchTokenWithSpDc(sessionSpDc);
-        if (tokenData?.accessToken) {
-          const updated: StoredSpotifySession = {
-            ...current,
-            spDc: sessionSpDc,
-            refreshToken: sessionSpDc,
-            accessToken: tokenData.accessToken,
-            expiresAt: tokenData.expiresAt,
-          };
-          store.set(updated as unknown as Record<string, unknown>);
-          return tokenData.accessToken;
-        }
-      }
-    } catch (err) {
-      console.error("[spotify] session cookie lookup failed:", err);
     }
 
     if (capturedBearerToken && capturedBearerToken.startsWith("BQ")) {
@@ -423,7 +570,20 @@ export function registerSpotifyIpc(): {
     if (!token) return null;
 
     let res = await queryPathfinder(token, operationName, sha256Hash, variables);
-    if (res.status === 401 || res.status === 403) {
+    const hasAuthError =
+      res.status === 401 ||
+      res.status === 403 ||
+      Boolean(
+        res.data?.errors?.some(
+          (e: any) =>
+            typeof e?.message === "string" &&
+            (e.message.toLowerCase().includes("unauthor") ||
+              e.message.toLowerCase().includes("token") ||
+              e.message.toLowerCase().includes("forbidden")),
+        ),
+      );
+
+    if (hasAuthError) {
       token = await getValidToken(true);
       if (token) {
         res = await queryPathfinder(token, operationName, sha256Hash, variables);
@@ -432,19 +592,106 @@ export function registerSpotifyIpc(): {
     return res.data;
   }
 
+  async function fetchLikedTracksInternal(): Promise<{
+    tracks: any[];
+    total: number;
+  }> {
+    const allTracks: any[] = [];
+    let offset = 0;
+    const limit = 50;
+    let total = 0;
+
+    try {
+      while (true) {
+        const json = await queryPathfinderWithRetry(
+          "fetchLibraryTracks",
+          PATHFINDER_HASHES.fetchLibraryTracks,
+          {
+            offset,
+            limit,
+          },
+        );
+
+        const tracksNode = json?.data?.me?.library?.tracks;
+        if (!tracksNode) break;
+
+        if (typeof tracksNode.totalCount === "number") {
+          total = tracksNode.totalCount;
+        }
+        const items = Array.isArray(tracksNode.items) ? tracksNode.items : [];
+        if (items.length === 0) break;
+
+        for (const item of items) {
+          const trackWrapper = item?.track;
+          const track = trackWrapper?.data;
+          if (!track || track.__typename !== "Track") continue;
+
+          const uri = String(track.uri || trackWrapper?._uri || "");
+          const sourceId = uri.split(":").pop() || "";
+          const title = typeof track.name === "string" ? track.name.trim() : "";
+          if (!sourceId || !title) continue;
+
+          const artistItems = Array.isArray(track.artists?.items)
+            ? track.artists.items
+            : [];
+          const artists = artistItems
+            .map((a: any) => a?.profile?.name || a?.name)
+            .filter(
+              (name: unknown): name is string =>
+                typeof name === "string" && name.length > 0,
+            );
+
+          const albumName =
+            typeof track.albumOfTrack?.name === "string"
+              ? track.albumOfTrack.name
+              : undefined;
+          const coverSources = track.albumOfTrack?.coverArt?.sources;
+          const coverUrl =
+            Array.isArray(coverSources) && coverSources.length > 0
+              ? coverSources[0]?.url
+              : undefined;
+          const durationMs =
+            track.duration?.totalMilliseconds ??
+            track.trackDuration?.totalMilliseconds;
+
+          allTracks.push({
+            sourceId,
+            title,
+            artists: artists.length > 0 ? artists : ["Spotify Artist"],
+            ...(albumName ? { album: albumName } : {}),
+            ...(typeof durationMs === "number" ? { durationMs } : {}),
+            ...(typeof coverUrl === "string" ? { coverUrl } : {}),
+          });
+        }
+
+        offset += items.length;
+        if (offset >= total) break;
+      }
+      return { tracks: allTracks, total: total || allTracks.length };
+    } catch (err) {
+      console.error("[spotify] fetchLikedTracksInternal failed:", err);
+      return { tracks: allTracks, total: allTracks.length };
+    }
+  }
+
+  let lastProfileHealAttemptAt = 0;
+
   ipcMain.handle("spotify-auth:get-session", async (event) => {
     if (!fromApp(event)) return null;
-    const raw = store.get();
-    if (!raw) return null;
-    const current = raw as unknown as StoredSpotifySession;
+    const current =
+      (store.get() as unknown as StoredSpotifySession | null) ??
+      (await resurrectSessionFromCookies());
+    if (!current) return null;
 
+    // Only heal if default placeholder is present and not recently attempted
     const needsProfileHeal =
-      !current.account ||
-      current.account.id === "spotify-user" ||
-      current.account.name === "Spotify" ||
-      !current.account.photoUrl;
+      (!current.account ||
+        current.account.id === "spotify-user" ||
+        current.account.name === "Spotify") &&
+      Date.now() - lastProfileHealAttemptAt > 5 * 60_000;
 
     if (needsProfileHeal) {
+      lastProfileHealAttemptAt = Date.now();
       try {
         const token = await getValidToken(false);
         if (token) {
@@ -463,7 +710,7 @@ export function registerSpotifyIpc(): {
                 product: profile.product || latest.account?.product || "free",
               },
             };
-            store.set(healed as unknown as Record<string, unknown>);
+            commitSpotifySession(healed);
             return healed;
           }
         }
@@ -645,7 +892,7 @@ export function registerSpotifyIpc(): {
             },
           };
 
-          store.set(finalSession as unknown as Record<string, unknown>);
+          commitSpotifySession(finalSession);
           finish({ success: true, session: finalSession });
         } catch (err) {
           console.error("[spotify] session extraction failed:", err);
@@ -779,6 +1026,22 @@ export function registerSpotifyIpc(): {
     async (event, { playlistId }: { playlistId: string }) => {
       if (!fromApp(event) || !playlistId) return { tracks: [], total: 0 };
 
+      // Handle liked tracks alias
+      if (
+        playlistId === "collection:tracks" ||
+        playlistId === "tracks" ||
+        playlistId === "collection"
+      ) {
+        const liked = await fetchLikedTracksInternal();
+        return {
+          tracks: liked.tracks,
+          total: liked.total,
+          title: "Músicas Curtidas (Spotify)",
+          description: "Músicas curtidas sincronizadas do seu Spotify",
+          coverUrl: liked.tracks[0]?.coverUrl,
+        };
+      }
+
       const allTracks: any[] = [];
       let offset = 0;
       const limit = 100;
@@ -888,83 +1151,7 @@ export function registerSpotifyIpc(): {
 
   ipcMain.handle("spotify:get-liked-tracks", async (event) => {
     if (!fromApp(event)) return { tracks: [], total: 0 };
-
-    const allTracks: any[] = [];
-    let offset = 0;
-    const limit = 50;
-    let total = 0;
-
-    try {
-      while (true) {
-        const json = await queryPathfinderWithRetry(
-          "fetchLibraryTracks",
-          PATHFINDER_HASHES.fetchLibraryTracks,
-          {
-            offset,
-            limit,
-          },
-        );
-
-        const tracksNode = json?.data?.me?.library?.tracks;
-        if (!tracksNode) break;
-
-        if (typeof tracksNode.totalCount === "number") {
-          total = tracksNode.totalCount;
-        }
-        const items = Array.isArray(tracksNode.items) ? tracksNode.items : [];
-        if (items.length === 0) break;
-
-        for (const item of items) {
-          const trackWrapper = item?.track;
-          const track = trackWrapper?.data;
-          if (!track || track.__typename !== "Track") continue;
-
-          const uri = String(track.uri || trackWrapper?._uri || "");
-          const sourceId = uri.split(":").pop() || "";
-          const title = typeof track.name === "string" ? track.name.trim() : "";
-          if (!sourceId || !title) continue;
-
-          const artistItems = Array.isArray(track.artists?.items)
-            ? track.artists.items
-            : [];
-          const artists = artistItems
-            .map((a: any) => a?.profile?.name || a?.name)
-            .filter(
-              (name: unknown): name is string =>
-                typeof name === "string" && name.length > 0,
-            );
-
-          const albumName =
-            typeof track.albumOfTrack?.name === "string"
-              ? track.albumOfTrack.name
-              : undefined;
-          const coverSources = track.albumOfTrack?.coverArt?.sources;
-          const coverUrl =
-            Array.isArray(coverSources) && coverSources.length > 0
-              ? coverSources[0]?.url
-              : undefined;
-          const durationMs =
-            track.duration?.totalMilliseconds ??
-            track.trackDuration?.totalMilliseconds;
-
-          allTracks.push({
-            sourceId,
-            title,
-            artists: artists.length > 0 ? artists : ["Spotify Artist"],
-            ...(albumName ? { album: albumName } : {}),
-            ...(typeof durationMs === "number" ? { durationMs } : {}),
-            ...(typeof coverUrl === "string" ? { coverUrl } : {}),
-          });
-        }
-
-        offset += items.length;
-        if (offset >= total) break;
-      }
-      return { tracks: allTracks, total: total || allTracks.length };
-    } catch (err) {
-      console.error("[spotify] get-liked-tracks failed:", err);
-      return { tracks: allTracks, total: allTracks.length };
-    }
+    return fetchLikedTracksInternal();
   });
 
   return {

@@ -189,14 +189,14 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/users/:id/playlists", async (request, reply) => {
     try {
-      requireUserId(request);
+      const viewer = requireUserId(request);
       const { id } = request.params as { id: string };
       const row = await findUser(id);
       const rows = await sql`
         select p.*, u.username as owner_username, u.display_name as owner_display_name, u.avatar_url as owner_avatar_url,
                (select count(*) from playlist_items i where i.playlist_id = p.id) as track_count
         from playlists p join users u on u.id = p.owner_id
-        where p.owner_id = ${row.id} and (p.is_public = true or p.owner_id::text = ${id})
+        where p.owner_id = ${row.id} and (p.is_public = true or p.owner_id::text = ${viewer})
         order by p.created_at desc
       `;
       return reply.send({

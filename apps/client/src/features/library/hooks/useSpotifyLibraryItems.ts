@@ -60,6 +60,12 @@ export function useSpotifyLibraryItems(): LibraryItemViewModel[] {
 
   return useMemo(() => {
     if (!syncLibrary || !signedIn) return [];
-    return playlists.map(toLibraryItem);
+    const seen = new Set<string>();
+    const unique = playlists.filter((p) => {
+      if (!p.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+    return unique.map(toLibraryItem);
   }, [playlists, signedIn, syncLibrary]);
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { api, getAuthSession, mediaUrl, toMaxQualityAvatarUrl } from "@/shared/api";
+import { api, mediaUrl, toMaxQualityAvatarUrl } from "@/shared/api";
 import {
   freshFor,
   revalidateResource,
