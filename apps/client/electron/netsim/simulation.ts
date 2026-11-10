@@ -26,7 +26,7 @@ const YOUTUBE_DOMAINS = [
   "ggpht.com",
 ];
 
-const LINER_DOMAINS = ["offy.app", "127.0.0.1"];
+const LINER_DOMAINS = ["offy.app", "cloudfy.shop", "127.0.0.1"];
 
 const COUNTRY_RE = /^[A-Z]{2}$/;
 
@@ -53,7 +53,7 @@ export function parseNetSimulation(env: {
   const unknown = names.filter((name) => !(name in SCENARIOS));
   if (unknown.length > 0)
     throw new Error(
-      `unknown simulation scenario: ${unknown.join(", ")} (use ${SIMULATION_SCENARIOS.join(", ")})`,
+      `unknown LINER_SIMULATE scenario: ${unknown.join(", ")} (use ${SIMULATION_SCENARIOS.join(", ")})`,
     );
   if (names.length === 0) return null;
   const sim: NetSimulation = {

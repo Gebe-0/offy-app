@@ -1,14 +1,16 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { randomInt } from "node:crypto";
 import { sql } from "../db.js";
 import { ApiError, sendError } from "../http.js";
 import { verifyAccessToken } from "../auth.js";
+import { escapeHtml } from "./share.js";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function generateCode(): string {
   let code = "";
   for (let i = 0; i < 6; i++) {
-    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    code += CODE_CHARS[randomInt(0, CODE_CHARS.length)];
   }
   return code;
 }
@@ -320,6 +322,9 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const body = (request.body ?? {}) as { track?: unknown };
       if (body.track) {
+        if (room.queue.length >= 100) {
+          throw new ApiError(400, "QUEUE_LIMIT_REACHED", "A fila atingiu o limite máximo de 100 faixas.");
+        }
         room.queue.push(body.track);
         broadcast(room, "queue_updated", { queue: room.queue });
       }
@@ -427,6 +432,10 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ code: "JAM_NOT_FOUND", message: "Jam not found" });
       }
 
+      if (!room.participants.has(userId)) {
+        return reply.status(403).send({ code: "NOT_IN_JAM", message: "Must join room before subscribing to events." });
+      }
+
       // Desacopla do Fastify lifecycle para manter conexão viva sem timeout
       reply.hijack();
 
@@ -468,6 +477,13 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       request.raw.on("close", () => {
         clearInterval(pingInterval);
         room.subscribers.delete(subscriber);
+
+        // Se não houver outras conexões ativas desse usuário, remove e notifica
+        const hasOtherConns = Array.from(room.subscribers).some((s) => s.userId === userId);
+        if (!hasOtherConns && room.participants.has(userId) && userId !== room.hostId) {
+          room.participants.delete(userId);
+          broadcast(room, "participant_left", { userId, participants: Array.from(room.participants.values()) });
+        }
       });
     } catch (error) {
       return sendError(reply, error);
@@ -481,11 +497,12 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
     const room = rooms.get(code);
 
     const appDeepLink = `offy://jam?id=${encodeURIComponent(code)}`;
-    const hostDisplayName = room?.hostName ?? "Seu amigo";
-    const currentTrackTitle = (room?.currentTrack as any)?.title ?? null;
-    const currentTrackArtist = (room?.currentTrack as any)?.artists ?? null;
+    const hostDisplayName = escapeHtml(room?.hostName ?? "Seu amigo");
+    const currentTrackTitle = (room?.currentTrack as any)?.title ? escapeHtml((room?.currentTrack as any).title) : null;
+    const currentTrackArtist = (room?.currentTrack as any)?.artists ? escapeHtml((room?.currentTrack as any).artists) : null;
+    const safeCode = encodeURIComponent(code);
 
-    const chars = Array.from({ length: 6 }, (_, i) => code[i] || "");
+    const chars = Array.from({ length: 6 }, (_, i) => escapeHtml(code[i] || ""));
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -814,7 +831,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
   <script>
     function copyCode() {
-      navigator.clipboard.writeText("${code}").then(() => {
+      navigator.clipboard.writeText("${safeCode}").then(() => {
         const btn = document.getElementById('copyBtn');
         btn.innerText = 'Código Copiado!';
         setTimeout(() => { btn.innerText = 'Copiar Código'; }, 2000);

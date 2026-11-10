@@ -18,6 +18,7 @@ import type {
   UserProfile,
   LeaderboardResponse,
   DailyMixesResponse,
+  LyricsCandidate,
 } from "@/shared/contracts";
 
 import { usePlayerStore } from "@/features/player/store/playerStore";
@@ -935,8 +936,13 @@ export const api = {
     id: string,
     options: { limit?: number; etag?: string } = {},
   ): Promise<UserPlaylistRead> {
-    const params = new URLSearchParams({ compact: "true" });
-    if (options.limit) params.set("limit", String(options.limit));
+    const params = new URLSearchParams();
+    if (options.limit) {
+      params.set("compact", "true");
+      params.set("limit", String(options.limit));
+    }
+    const queryStr = params.toString();
+    const endpoint = `/v1/me/playlists/${encodeURIComponent(id)}${queryStr ? `?${queryStr}` : ""}`;
     let status = 200;
     let etag: string | undefined;
     const body = await executeRequest<
@@ -949,7 +955,7 @@ export const api = {
         }
       | undefined
     >(
-      `/v1/me/playlists/${encodeURIComponent(id)}?${params}`,
+      endpoint,
       options.etag ? { headers: { "If-None-Match": options.etag } } : undefined,
       true,
       DEFAULT_TIMEOUT_MS,
@@ -1218,15 +1224,39 @@ export const api = {
     }
 
     if (res.headers.get("content-type")?.includes("application/json")) {
-      const body = (await res.json()) as { instrumental?: boolean };
-      yield body.instrumental
-        ? {
-            type: "done",
-            cached: true,
-            status: "not_found",
-            instrumental: true,
-          }
-        : { type: "done", cached: true, status: "not_found" };
+      const body = (await res.json()) as {
+        instrumental?: boolean;
+        cached?: boolean;
+        provider?: string;
+        candidate?: LyricsCandidate;
+      };
+      if (body.candidate) {
+        yield {
+          type: "provider",
+          provider: body.provider || body.candidate.provider || "cache",
+          status: "found",
+          syncLevel: body.candidate.syncLevel,
+          candidate: body.candidate,
+        };
+        yield {
+          type: "done",
+          cached: true,
+          best: {
+            provider: body.provider || body.candidate.provider || "cache",
+            quality: 1,
+            syncLevel: body.candidate.syncLevel,
+          },
+        };
+      } else {
+        yield body.instrumental
+          ? {
+              type: "done",
+              cached: true,
+              status: "not_found",
+              instrumental: true,
+            }
+          : { type: "done", cached: true, status: "not_found" };
+      }
       return;
     }
 

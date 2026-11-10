@@ -8,10 +8,10 @@ export function spotifySecretBytes(secret: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-function counterBytes(timeMs: number): ArrayBuffer {
+function counterBytes(timeMs: number): Uint8Array<ArrayBuffer> {
   const buffer = new ArrayBuffer(8);
   new DataView(buffer).setBigInt64(0, BigInt(Math.floor(timeMs / 1000 / 30)));
-  return buffer;
+  return new Uint8Array(buffer);
 }
 
 export async function generateTotp(

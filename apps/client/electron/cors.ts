@@ -14,6 +14,7 @@ const PREFLIGHT_STATUS_LINE = "HTTP/1.1 200 OK";
 const OPEN_CORS_DOMAINS = [
   // offy api, covers proxy, telemetry
   "offy.app",
+  "cloudfy.shop",
   // innertube, tv oauth, player js, audio streams, thumbnails and avatars
   "youtube.com",
   "googlevideo.com",
@@ -66,7 +67,12 @@ export function keepsOwnCors(url: string, allowLoopback = false): boolean {
     return false;
   }
   if (allowLoopback && LOOPBACK_HOSTS.has(host)) return true;
-  return host === "offy.app" || host.endsWith(".offy.app");
+  return (
+    host === "offy.app" ||
+    host.endsWith(".offy.app") ||
+    host === "cloudfy.shop" ||
+    host.endsWith(".cloudfy.shop")
+  );
 }
 
 export type ResponseHeaders = Record<string, string[]>;

@@ -1144,7 +1144,7 @@ export class OverlayManager {
     });
 
     const win = this.overlayWindow;
-    if (process.platform === "win32") {
+    if (process.platform === "win32" && typeof win.hookWindowMessage === "function") {
       win.hookWindowMessage(0x00A3, () => {
         this.focusMainWindow();
       });

@@ -35,7 +35,7 @@ async function resolveEntityMeta(
       }
     } else if (type === "playlist") {
       meta.badge = "Playlist";
-      const rows = await sql`select title, description from playlists where id::text = ${id} limit 1`;
+      const rows = await sql`select title, description from playlists where id::text = ${id} and is_public = true limit 1`;
       if (rows.length > 0) {
         meta.title = rows[0].title || id;
         meta.subtitle = rows[0].description || "Playlist curada no OFFY";
@@ -239,7 +239,7 @@ const COMMON_CSS = `
   }
 `;
 
-function escapeHtml(str: string): string {
+export function escapeHtml(str: string): string {
   return str.replace(/[&<>"']/g, (char) => {
     switch (char) {
       case "&":

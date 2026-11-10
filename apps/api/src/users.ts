@@ -1,10 +1,10 @@
 import type { PublicUser, UserProfile } from "@offy/contracts";
 import { iso } from "./http.js";
 
-export function publicUser(row: any): PublicUser {
+export function publicUser(row: any, includePrivate = false): PublicUser {
   return {
     id: String(row.id),
-    ...(row.email ? { email: String(row.email) } : {}),
+    ...(includePrivate && row.email ? { email: String(row.email) } : {}),
     username: row.username ?? null,
     displayName: row.display_name ?? null,
     avatarUrl: row.avatar_url ?? null,
@@ -17,9 +17,12 @@ export function publicUser(row: any): PublicUser {
   };
 }
 
-export function userProfile(row: any, extra: { followersCount: number; followingCount: number; isFollowing?: boolean }): UserProfile {
+export function userProfile(
+  row: any,
+  extra: { followersCount: number; followingCount: number; isFollowing?: boolean; includePrivate?: boolean },
+): UserProfile {
   return {
-    ...publicUser(row),
+    ...publicUser(row, extra.includePrivate),
     followersCount: extra.followersCount,
     followingCount: extra.followingCount,
     ...(extra.isFollowing !== undefined ? { isFollowing: extra.isFollowing } : {}),

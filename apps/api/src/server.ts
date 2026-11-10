@@ -19,6 +19,7 @@ import { sendError } from "./http.js";
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? "info" },
   bodyLimit: 8 * 1024 * 1024,
+  trustProxy: true,
 });
 
 // Suporta corpos vazios com content-type: application/json sem erro FST_ERR_CTP_EMPTY_JSON_BODY
@@ -41,7 +42,11 @@ app.addContentTypeParser(
 
 const allowedOrigins =
   env.corsOrigin === "*"
-    ? [/localhost/, /127\.0\.0\.1/, /\.offy\.app$/]
+    ? [
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+        /^https:\/\/([a-z0-9-]+\.)*offy\.app$/,
+        /^https:\/\/([a-z0-9-]+\.)*cloudfy\.shop$/,
+      ]
     : env.corsOrigin.split(",").map((o) => o.trim());
 
 await app.register(cors, {
