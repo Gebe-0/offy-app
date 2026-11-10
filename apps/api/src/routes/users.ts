@@ -59,7 +59,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const userId = requireUserId(request);
       const rows = await sql`select * from users where id = ${userId} limit 1`;
       if (!rows[0]) throw new ApiError(404, "USER_NOT_FOUND", "USER_NOT_FOUND");
-      return reply.send(userProfile(rows[0], await counts(userId)));
+      return reply.send(userProfile(rows[0], { ...(await counts(userId)), includePrivate: true }));
     } catch (error) {
       return sendError(reply, error);
     }

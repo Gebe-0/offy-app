@@ -665,7 +665,7 @@ export function registerSpotifyIpc(): {
         }
 
         offset += items.length;
-        if (offset >= total) break;
+        if (items.length < limit || (total > 0 && offset >= total)) break;
       }
       return { tracks: allTracks, total: total || allTracks.length };
     } catch (err) {
@@ -1133,7 +1133,7 @@ export function registerSpotifyIpc(): {
           }
 
           offset += items.length;
-          if (offset >= total) break;
+          if (items.length < limit || (total > 0 && offset >= total)) break;
         }
         return {
           tracks: allTracks,

@@ -129,7 +129,9 @@ export async function registerPlaylistRoutes(app: FastifyInstance): Promise<void
         return reply.status(304).send();
       }
 
-      const limit = query.compact === "true" ? int(query.limit, 100) : undefined;
+      const limit = query.limit
+        ? int(query.limit, 100)
+        : (query.compact === "true" ? 100 : undefined);
       const items = await loadItems(id, userId, limit);
       const durationMs = items.reduce((total, item) => total + (item.track.durationMs ?? 0), 0);
 
