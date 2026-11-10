@@ -30,7 +30,7 @@ async function call(method, path, body, opts = { auth: true }) {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(method !== "GET" && body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const text = await res.text();
   let json = null;

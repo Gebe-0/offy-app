@@ -239,14 +239,34 @@ const COMMON_CSS = `
   }
 `;
 
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
 export function renderNotFoundHtml(options?: {
   title?: string;
   message?: string;
 }): string {
-  const title = options?.title || "Nada tocando por aqui";
-  const message =
+  const title = escapeHtml(options?.title || "Nada tocando por aqui");
+  const message = escapeHtml(
     options?.message ||
-    "O link acessado não existe, foi movido ou a faixa não está mais disponível.";
+      "O link acessado não existe, foi movido ou a faixa não está mais disponível.",
+  );
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -316,20 +336,25 @@ export function renderShareHtml(
 ): string {
   const appDeepLink =
     type === "home" ? "offy://home" : `offy://${type}?id=${encodeURIComponent(id)}`;
+  const safeTitle = escapeHtml(meta.title);
+  const safeSubtitle = escapeHtml(meta.subtitle);
+  const safeBadge = escapeHtml(meta.badge);
+  const safeCoverUrl = meta.coverUrl ? escapeHtml(meta.coverUrl) : null;
+  const safeDeepLink = escapeHtml(appDeepLink);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${meta.title} • OFFY</title>
+  <title>${safeTitle} • OFFY</title>
   
   <!-- OpenGraph / Social Embed -->
   <meta property="og:type" content="music.song">
   <meta property="og:site_name" content="OFFY Music Player">
-  <meta property="og:title" content="${meta.title}">
-  <meta property="og:description" content="${meta.subtitle}">
-  ${meta.coverUrl ? `<meta property="og:image" content="${meta.coverUrl}">` : ""}
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:description" content="${safeSubtitle}">
+  ${safeCoverUrl ? `<meta property="og:image" content="${safeCoverUrl}">` : ""}
   <meta name="theme-color" content="#060607">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -347,11 +372,11 @@ export function renderShareHtml(
     </div>
 
     <section class="deck-card">
-      <span class="meta-tag">${meta.badge}</span>
+      <span class="meta-tag">${safeBadge}</span>
 
       ${
-        meta.coverUrl
-          ? `<img src="${meta.coverUrl}" alt="${meta.title}" class="media-artwork ${type === "artist" ? "circle" : "square"}" />`
+        safeCoverUrl
+          ? `<img src="${safeCoverUrl}" alt="${safeTitle}" class="media-artwork ${type === "artist" ? "circle" : "square"}" />`
           : `<div class="disc-visual" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -360,11 +385,11 @@ export function renderShareHtml(
             </div>`
       }
 
-      <h1>${meta.title}</h1>
-      <p class="subline">${meta.subtitle}</p>
+      <h1>${safeTitle}</h1>
+      <p class="subline">${safeSubtitle}</p>
 
       <div class="action-stack">
-        <a href="${appDeepLink}" class="btn-primary" id="openBtn">
+        <a href="${safeDeepLink}" class="btn-primary" id="openBtn">
           Abrir no OFFY
         </a>
         <a href="https://github.com/Gebe-0/offy-app/releases/latest" class="btn-secondary" target="_blank" rel="noopener noreferrer">
@@ -382,7 +407,7 @@ export function renderShareHtml(
     </footer>
   </main>
 
-  ${autoRedirect ? `<script>window.location.href = "${appDeepLink}";</script>` : ""}
+  ${autoRedirect ? `<script>window.location.href = ${JSON.stringify(appDeepLink)};</script>` : ""}
 </body>
 </html>`;
 }

@@ -49,14 +49,32 @@ async function issueTokens(row: any): Promise<AuthTokens> {
   };
 }
 
-export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
-  // PoW desligado: o cliente trata 404 como "sem desafio".
-  app.post("/v1/auth/challenge", async (_request, reply) => {
-    reply.status(404).send({ code: "NO_CHALLENGE", message: "challenge disabled" });
-  });
+const authAttempts = new Map<string, { count: number; resetAt: number }>();
 
+function throttle(ip: string, maxAttempts: number, windowMs = 60_000): void {
+  const now = Date.now();
+  const entry = authAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    authAttempts.set(ip, { count: 1, resetAt: now + windowMs });
+    return;
+  }
+  if (entry.count >= maxAttempts) {
+    throw new ApiError(429, "TOO_MANY_REQUESTS", "Muitas tentativas. Aguarde um minuto.");
+  }
+  entry.count += 1;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of authAttempts.entries()) {
+    if (now > entry.resetAt) authAttempts.delete(ip);
+  }
+}, 5 * 60_000).unref();
+
+export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/auth/register", async (request, reply) => {
     try {
+      throttle(request.ip, 10);
       const body = (request.body ?? {}) as AuthBody;
       const email = requireEmail(body.email);
       const password = requirePassword(body.password);
@@ -88,6 +106,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/auth/login", async (request, reply) => {
     try {
+      throttle(request.ip, 15);
       const body = (request.body ?? {}) as AuthBody;
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       const password = typeof body.password === "string" ? body.password : "";

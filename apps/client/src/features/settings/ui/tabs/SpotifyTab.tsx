@@ -19,8 +19,6 @@ export function SpotifyTab({ searchQuery }: { searchQuery?: string }) {
 
   const syncLibrary = useSpotifyPreferences((s) => s.syncLibrary);
   const setSyncLibrary = useSpotifyPreferences((s) => s.setSyncLibrary);
-  const syncLikedSongs = useSpotifyPreferences((s) => s.syncLikedSongs);
-  const setSyncLikedSongs = useSpotifyPreferences((s) => s.setSyncLikedSongs);
   const useAccountForImport = useSpotifyPreferences(
     (s) => s.useAccountForImport,
   );
@@ -40,6 +38,14 @@ export function SpotifyTab({ searchQuery }: { searchQuery?: string }) {
       return;
     }
 
+    if (syncingLikes || useImportStore.getState().isPolling) {
+      toast(
+        "Sincronização já está em andamento...",
+        "info",
+      );
+      return;
+    }
+
     setSyncingLikes(true);
     try {
       await useImportStore
@@ -50,7 +56,7 @@ export function SpotifyTab({ searchQuery }: { searchQuery?: string }) {
           "Importação das Músicas Curtidas iniciada!",
         "checkmark",
       );
-    } catch (err) {
+    } catch {
       toast(
         t("settings.spotify.sync_failed") ||
           "Falha ao iniciar sincronização das músicas curtidas.",

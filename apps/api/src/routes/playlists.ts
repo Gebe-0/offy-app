@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ApiTrack, Track, UserPlaylist, UserPlaylistItem } from "@offy/contracts";
 import { sql } from "../db.js";
-import { ApiError, encodeCursor, int, iso, requireUserId, sendError } from "../http.js";
+import { ApiError, int, iso, requireUserId, sendError } from "../http.js";
 import { ensureTrack, rowToTrack, upsertTrack } from "../tracks.js";
 
 function playlistJson(row: any): UserPlaylist {

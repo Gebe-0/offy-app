@@ -268,10 +268,17 @@ function OnlineLibraryPage() {
     } else {
       return [];
     }
+    const seenIds = new Set<string>();
+    const deduplicatedSource = source.filter((item) => {
+      const key = `${item.kind}:${item.id}`;
+      if (seenIds.has(key)) return false;
+      seenIds.add(key);
+      return true;
+    });
     const filtered =
       debouncedQuery.length === 0
-        ? source
-        : source.filter((item) => {
+        ? deduplicatedSource
+        : deduplicatedSource.filter((item) => {
             const haystack = `${item.title} ${item.subtitle}`.toLowerCase();
             return haystack.includes(debouncedQuery);
           });

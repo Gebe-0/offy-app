@@ -67,7 +67,6 @@ import {
   restoreUnderCursor,
 } from "./window-drag.js";
 import {
-  isWindows10Or11,
   isWindows11,
   loadSnapPreviewAddon,
   NativeSnapPreview,
@@ -359,6 +358,21 @@ function createWindow() {
       shell.openExternal(url);
     }
     return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
+    const isLocal =
+      targetUrl.startsWith("file:") ||
+      Boolean(
+        process.env.VITE_DEV_SERVER_URL &&
+          targetUrl.startsWith(process.env.VITE_DEV_SERVER_URL),
+      );
+    if (!isLocal) {
+      event.preventDefault();
+      if (targetUrl.startsWith("https:") || targetUrl.startsWith("http:")) {
+        shell.openExternal(targetUrl);
+      }
+    }
   });
 
   mainWindow.webContents.on("render-process-gone", (_event, details) => {

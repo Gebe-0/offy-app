@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "../db.js";
 import { ApiError, sendError } from "../http.js";
 import { verifyAccessToken } from "../auth.js";

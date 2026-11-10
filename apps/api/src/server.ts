@@ -39,8 +39,13 @@ app.addContentTypeParser(
   },
 );
 
+const allowedOrigins =
+  env.corsOrigin === "*"
+    ? [/localhost/, /127\.0\.0\.1/, /\.offy\.app$/]
+    : env.corsOrigin.split(",").map((o) => o.trim());
+
 await app.register(cors, {
-  origin: env.corsOrigin === "*" ? true : env.corsOrigin.split(","),
+  origin: allowedOrigins,
   credentials: true,
   exposedHeaders: ["etag", "x-request-id"],
 });
