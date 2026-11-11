@@ -660,6 +660,17 @@ if (!gotTheLock) {
       mainWindow.setFullScreen(!mainWindow.isFullScreen());
     });
 
+    ipcMain.handle("window:set-fullscreen", (_event, flag: boolean) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (typeof flag === "boolean") {
+        if (mainWindow.isFullScreen() !== flag) {
+          mainWindow.setFullScreen(flag);
+        }
+      } else {
+        mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      }
+    });
+
     ipcMain.handle("window:close", () => {
       mainWindow?.close();
     });

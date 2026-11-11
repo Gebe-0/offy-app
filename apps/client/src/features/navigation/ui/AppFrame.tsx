@@ -113,7 +113,7 @@ export default function AppFrame({ children }: AppFrameProps) {
   const { pathname, search } = location;
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { isEdgeToEdge } = useWindowState();
+  const { isMaximized, isFullScreen, isEdgeToEdge } = useWindowState();
 
   const searchOpen = useModalStore((state) => state.searchOpen);
   const openSearch = useModalStore((state) => state.openSearch);
@@ -255,26 +255,102 @@ export default function AppFrame({ children }: AppFrameProps) {
   const isRightDrawerOpen =
     queuePopupOpen && !searchOpen && !isFullscreenPlayer;
 
+  // Track if we elevated to OS fullscreen because the app was maximized
+  const autoElevatedToOsFullscreenRef = useRef(false);
+  const isMaximizedRef = useRef(isMaximized);
+  isMaximizedRef.current = isMaximized;
+  const isFullScreenRef = useRef(isFullScreen);
+  isFullScreenRef.current = isFullScreen;
+
   const openFullscreenPlayer = useCallback(() => {
     setFullscreenPlayerOpen(true);
+    // If the app is maximized (tela cheia com barra de tarefas), promote to native OS
+    // fullscreen so it covers the taskbar completely.
+    // If the app is in window mode, keep it within its window without touching OS state.
+    if (isMaximizedRef.current && !isFullScreenRef.current) {
+      autoElevatedToOsFullscreenRef.current = true;
+      if (window.linerElectron?.setFullScreen) {
+        void window.linerElectron.setFullScreen(true);
+      } else if (window.linerElectron?.toggleFullScreen) {
+        void window.linerElectron.toggleFullScreen();
+      }
+    }
   }, [setFullscreenPlayerOpen]);
 
   const closeFullscreenPlayer = useCallback(() => {
     setFullscreenPlayerOpen(false);
+    if (autoElevatedToOsFullscreenRef.current) {
+      autoElevatedToOsFullscreenRef.current = false;
+      if (window.linerElectron?.setFullScreen) {
+        void window.linerElectron.setFullScreen(false);
+      } else if (window.linerElectron?.toggleFullScreen) {
+        void window.linerElectron.toggleFullScreen();
+      }
+    }
   }, [setFullscreenPlayerOpen]);
 
   const handleCloseFullscreen = useCallback(() => {
     if (fullscreenPlayerOpen) {
-      setFullscreenPlayerOpen(false);
+      closeFullscreenPlayer();
     } else if (isFullscreenRoute) {
+      if (autoElevatedToOsFullscreenRef.current) {
+        autoElevatedToOsFullscreenRef.current = false;
+        if (window.linerElectron?.setFullScreen) {
+          void window.linerElectron.setFullScreen(false);
+        } else if (window.linerElectron?.toggleFullScreen) {
+          void window.linerElectron.toggleFullScreen();
+        }
+      }
       navigate("/", { replace: true });
     }
   }, [
+    closeFullscreenPlayer,
     fullscreenPlayerOpen,
     isFullscreenRoute,
     navigate,
-    setFullscreenPlayerOpen,
   ]);
+
+  useEffect(() => {
+    if (
+      isFullscreenRoute &&
+      isMaximizedRef.current &&
+      !isFullScreenRef.current &&
+      !autoElevatedToOsFullscreenRef.current
+    ) {
+      autoElevatedToOsFullscreenRef.current = true;
+      if (window.linerElectron?.setFullScreen) {
+        void window.linerElectron.setFullScreen(true);
+      } else if (window.linerElectron?.toggleFullScreen) {
+        void window.linerElectron.toggleFullScreen();
+      }
+    }
+  }, [isFullscreenRoute]);
+
+  useEffect(() => {
+    if (!isFullscreenPlayer && autoElevatedToOsFullscreenRef.current) {
+      autoElevatedToOsFullscreenRef.current = false;
+      if (window.linerElectron?.setFullScreen) {
+        void window.linerElectron.setFullScreen(false);
+      } else if (window.linerElectron?.toggleFullScreen) {
+        void window.linerElectron.toggleFullScreen();
+      }
+    }
+  }, [isFullscreenPlayer]);
+
+  useEffect(() => {
+    if (!isFullScreen && autoElevatedToOsFullscreenRef.current) {
+      autoElevatedToOsFullscreenRef.current = false;
+    }
+  }, [isFullScreen]);
+
+  useEffect(() => {
+    return () => {
+      if (autoElevatedToOsFullscreenRef.current) {
+        autoElevatedToOsFullscreenRef.current = false;
+        void window.linerElectron?.setFullScreen?.(false);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isFullscreenPlayer && !hasCurrentTrack) {
