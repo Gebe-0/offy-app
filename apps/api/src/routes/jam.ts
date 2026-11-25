@@ -27,6 +27,7 @@ export interface JamParticipant {
 export interface JamSubscriber {
   userId: string;
   send: (event: string, data: unknown) => void;
+  close: () => void;
 }
 
 export interface JamRoom {
@@ -46,6 +47,19 @@ export interface JamRoom {
 
 const rooms = new Map<string, JamRoom>();
 
+function closeRoom(code: string, room: JamRoom, reason: string) {
+  broadcast(room, "jam_closed", { reason });
+  for (const sub of room.subscribers) {
+    try {
+      sub.close();
+    } catch {
+      // ignore
+    }
+  }
+  room.subscribers.clear();
+  rooms.delete(code);
+}
+
 // Limpeza automática de salas inativas ou abandonadas
 setInterval(() => {
   const now = Date.now();
@@ -54,8 +68,7 @@ setInterval(() => {
       room.subscribers.size === 0 && now - room.updatedAt > 15 * 60 * 1000;
     const maxLifetimeTimeout = now - room.updatedAt > 12 * 60 * 60 * 1000;
     if (noSubscribersTimeout || maxLifetimeTimeout) {
-      broadcast(room, "jam_closed", { reason: "timeout" });
-      rooms.delete(code);
+      closeRoom(code, room, "timeout");
     }
   }
 }, 60 * 1000);
@@ -123,8 +136,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       // Fecha salas antigas do mesmo host
       for (const [existingCode, existingRoom] of rooms.entries()) {
         if (existingRoom.hostId === userId) {
-          broadcast(existingRoom, "jam_closed", { reason: "host_recreated" });
-          rooms.delete(existingCode);
+          closeRoom(existingCode, existingRoom, "host_recreated");
         }
       }
 
@@ -186,7 +198,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const room = rooms.get(code);
       if (!room) {
-        throw new ApiError(404, "JAM_NOT_FOUND", "Sessão Jam não encontrada.");
+        throw new ApiError(404, "Sessão Jam não encontrada.", "JAM_NOT_FOUND");
       }
 
       const user = await getUserInfo(userId);
@@ -196,8 +208,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       for (const [existingCode, existingRoom] of rooms.entries()) {
         if (existingCode !== code && existingRoom.participants.has(userId)) {
           if (existingRoom.hostId === userId) {
-            broadcast(existingRoom, "jam_closed", { reason: "host_recreated" });
-            rooms.delete(existingCode);
+            closeRoom(existingCode, existingRoom, "host_recreated");
           } else {
             existingRoom.participants.delete(userId);
             broadcast(existingRoom, "participant_left", {
@@ -238,7 +249,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const room = rooms.get(code);
       if (!room) {
-        throw new ApiError(404, "JAM_NOT_FOUND", "Sessão Jam não encontrada.");
+        throw new ApiError(404, "Sessão Jam não encontrada.", "JAM_NOT_FOUND");
       }
 
       return reply.send({
@@ -258,9 +269,9 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       const code = (params.code ?? "").toUpperCase().trim();
 
       const room = rooms.get(code);
-      if (!room) throw new ApiError(404, "JAM_NOT_FOUND", "Sessão não encontrada.");
+      if (!room) throw new ApiError(404, "Sessão não encontrada.", "JAM_NOT_FOUND");
       if (room.hostId !== userId) {
-        throw new ApiError(403, "NOT_HOST", "Apenas o Host pode alterar as configurações da Jam.");
+        throw new ApiError(403, "Apenas o Host pode alterar as configurações da Jam.", "NOT_HOST");
       }
 
       const body = (request.body ?? {}) as { allowGuestControl?: boolean };
@@ -289,8 +300,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       if (!room) return reply.send({ ok: true });
 
       if (room.hostId === userId) {
-        broadcast(room, "jam_closed", { reason: "host_left" });
-        rooms.delete(code);
+        closeRoom(code, room, "host_left");
       } else {
         room.participants.delete(userId);
         broadcast(room, "participant_left", {
@@ -313,19 +323,20 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       const code = (params.code ?? "").toUpperCase().trim();
 
       const room = rooms.get(code);
-      if (!room) throw new ApiError(404, "JAM_NOT_FOUND", "Sessão não encontrada.");
-      if (!room.participants.has(userId)) throw new ApiError(403, "NOT_IN_JAM", "Você não está nesta Jam.");
+      if (!room) throw new ApiError(404, "Sessão não encontrada.", "JAM_NOT_FOUND");
+      if (!room.participants.has(userId)) throw new ApiError(403, "Você não está nesta Jam.", "NOT_IN_JAM");
 
       if (!room.allowGuestControl && room.hostId !== userId) {
-        throw new ApiError(403, "GUEST_CONTROL_DISABLED", "Apenas o Host pode adicionar faixas à fila.");
+        throw new ApiError(403, "Apenas o Host pode adicionar faixas à fila.", "GUEST_CONTROL_DISABLED");
       }
 
       const body = (request.body ?? {}) as { track?: unknown };
       if (body.track) {
         if (room.queue.length >= 100) {
-          throw new ApiError(400, "QUEUE_LIMIT_REACHED", "A fila atingiu o limite máximo de 100 faixas.");
+          throw new ApiError(400, "A fila atingiu o limite máximo de 100 faixas.", "QUEUE_LIMIT_REACHED");
         }
         room.queue.push(body.track);
+        room.updatedAt = Date.now();
         broadcast(room, "queue_updated", { queue: room.queue });
       }
 
@@ -344,14 +355,15 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       const trackId = params.trackId ?? "";
 
       const room = rooms.get(code);
-      if (!room) throw new ApiError(404, "JAM_NOT_FOUND", "Sessão não encontrada.");
-      if (!room.participants.has(userId)) throw new ApiError(403, "NOT_IN_JAM", "Você não está nesta Jam.");
+      if (!room) throw new ApiError(404, "Sessão não encontrada.", "JAM_NOT_FOUND");
+      if (!room.participants.has(userId)) throw new ApiError(403, "Você não está nesta Jam.", "NOT_IN_JAM");
 
       if (!room.allowGuestControl && room.hostId !== userId) {
-        throw new ApiError(403, "GUEST_CONTROL_DISABLED", "Apenas o Host pode gerenciar a fila.");
+        throw new ApiError(403, "Apenas o Host pode gerenciar a fila.", "GUEST_CONTROL_DISABLED");
       }
 
       room.queue = room.queue.filter((t: any) => t?.id !== trackId);
+      room.updatedAt = Date.now();
       broadcast(room, "queue_updated", { queue: room.queue });
 
       return reply.send({ ok: true, queue: room.queue });
@@ -368,12 +380,12 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       const code = (params.code ?? "").toUpperCase().trim();
 
       const room = rooms.get(code);
-      if (!room) throw new ApiError(404, "JAM_NOT_FOUND", "Sessão não encontrada.");
-      if (!room.participants.has(userId)) throw new ApiError(403, "NOT_IN_JAM", "Você não está nesta Jam.");
+      if (!room) throw new ApiError(404, "Sessão não encontrada.", "JAM_NOT_FOUND");
+      if (!room.participants.has(userId)) throw new ApiError(403, "Você não está nesta Jam.", "NOT_IN_JAM");
 
       // Validação de permissão para convidados
       if (!room.allowGuestControl && room.hostId !== userId) {
-        throw new ApiError(403, "GUEST_CONTROL_DISABLED", "O Host desativou o controle para convidados.");
+        throw new ApiError(403, "O Host desativou o controle para convidados.", "GUEST_CONTROL_DISABLED");
       }
 
       const body = (request.body ?? {}) as {
@@ -382,26 +394,31 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         positionMs?: number;
       };
 
+      const safePos = (pos: unknown) => {
+        const n = Number(pos);
+        return Number.isFinite(n) ? Math.max(0, n) : 0;
+      };
+
       const now = Date.now();
       if (body.action === "TRACK_CHANGE" && body.track !== undefined) {
         room.currentTrack = body.track;
-        room.positionMs = Math.max(0, Number(body.positionMs ?? 0));
+        room.positionMs = safePos(body.positionMs);
         room.status = "playing";
         room.updatedAt = now;
       } else if (body.action === "PLAY") {
         room.status = "playing";
         if (body.positionMs !== undefined) {
-          room.positionMs = Math.max(0, Number(body.positionMs));
+          room.positionMs = safePos(body.positionMs);
         }
         room.updatedAt = now;
       } else if (body.action === "PAUSE") {
         room.status = "paused";
         if (body.positionMs !== undefined) {
-          room.positionMs = Math.max(0, Number(body.positionMs));
+          room.positionMs = safePos(body.positionMs);
         }
         room.updatedAt = now;
       } else if (body.action === "SEEK") {
-        room.positionMs = Math.max(0, Number(body.positionMs ?? 0));
+        room.positionMs = safePos(body.positionMs);
         room.updatedAt = now;
       }
 
@@ -449,6 +466,14 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       });
       res.flushHeaders?.();
 
+      let isCleanedUp = false;
+      const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        clearInterval(pingInterval);
+        room.subscribers.delete(subscriber);
+      };
+
       const subscriber: JamSubscriber = {
         userId,
         send: (event: string, data: unknown) => {
@@ -456,6 +481,14 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
             res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
           } catch {
             // dead socket
+          }
+        },
+        close: () => {
+          cleanup();
+          try {
+            res.end();
+          } catch {
+            // ignore
           }
         },
       };
@@ -469,21 +502,23 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         try {
           res.write(": ping\n\n");
         } catch {
-          clearInterval(pingInterval);
-          room.subscribers.delete(subscriber);
+          cleanup();
         }
       }, 10000);
 
       request.raw.on("close", () => {
-        clearInterval(pingInterval);
-        room.subscribers.delete(subscriber);
+        cleanup();
 
-        // Se não houver outras conexões ativas desse usuário, remove e notifica
-        const hasOtherConns = Array.from(room.subscribers).some((s) => s.userId === userId);
-        if (!hasOtherConns && room.participants.has(userId) && userId !== room.hostId) {
-          room.participants.delete(userId);
-          broadcast(room, "participant_left", { userId, participants: Array.from(room.participants.values()) });
-        }
+        // Se não houver outras conexões ativas desse usuário, remove após grace period curto (15s)
+        setTimeout(() => {
+          const currentRoom = rooms.get(code);
+          if (!currentRoom) return;
+          const hasOtherConns = Array.from(currentRoom.subscribers).some((s) => s.userId === userId);
+          if (!hasOtherConns && currentRoom.participants.has(userId) && userId !== currentRoom.hostId) {
+            currentRoom.participants.delete(userId);
+            broadcast(currentRoom, "participant_left", { userId, participants: Array.from(currentRoom.participants.values()) });
+          }
+        }, 15000);
       });
     } catch (error) {
       return sendError(reply, error);
@@ -493,14 +528,18 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Página web pública de convite (Design premium Glassmorphism com o visual do OFFY)
   app.get("/jam/:code", async (request, reply) => {
     const params = request.params as { code?: string };
-    const code = (params.code ?? "").toUpperCase().trim();
+    const rawCode = (params.code ?? "").toUpperCase().trim();
+    const code = /^[A-Z0-9]{6}$/.test(rawCode) ? rawCode : "";
+    if (!code) {
+      return reply.status(404).type("text/plain").send("Código de Jam inválido.");
+    }
     const room = rooms.get(code);
 
     const appDeepLink = `offy://jam?id=${encodeURIComponent(code)}`;
     const hostDisplayName = escapeHtml(room?.hostName ?? "Seu amigo");
     const currentTrackTitle = (room?.currentTrack as any)?.title ? escapeHtml((room?.currentTrack as any).title) : null;
     const currentTrackArtist = (room?.currentTrack as any)?.artists ? escapeHtml((room?.currentTrack as any).artists) : null;
-    const safeCode = encodeURIComponent(code);
+    const safeCode = escapeHtml(code);
 
     const chars = Array.from({ length: 6 }, (_, i) => escapeHtml(code[i] || ""));
 
@@ -509,7 +548,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OFFY • Ouvir Juntos (${code})</title>
+  <title>OFFY • Ouvir Juntos (${safeCode})</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
@@ -847,7 +886,11 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Alias para /v1/jam/:code/invite
   app.get("/v1/jam/:code/invite", async (request, reply) => {
     const params = request.params as { code?: string };
-    const code = (params.code ?? "").toUpperCase().trim();
-    return reply.redirect(`/jam/${code}`);
+    const rawCode = (params.code ?? "").toUpperCase().trim();
+    const code = /^[A-Z0-9]{6}$/.test(rawCode) ? rawCode : "";
+    if (!code) {
+      return reply.status(404).send({ code: "JAM_NOT_FOUND", message: "Jam not found" });
+    }
+    return reply.redirect(`/jam/${encodeURIComponent(code)}`);
   });
 }

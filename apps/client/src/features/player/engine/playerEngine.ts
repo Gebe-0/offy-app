@@ -580,6 +580,10 @@ class PlayerEngine {
     startIndex?: number,
   ): Promise<void> {
     if (!tracks || tracks.length === 0) return;
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const seedIndex =
       startIndex !== undefined && startIndex >= 0 && startIndex < tracks.length
@@ -623,6 +627,10 @@ class PlayerEngine {
 
   public async startRadioStation(track: Track): Promise<void> {
     if (isLocalTrackId(track.id)) return;
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou o controle para convidados nesta Jam.");
+      return;
+    }
     const store = usePlayerStore.getState();
     this.sessionId += 1;
     const mySession = this.sessionId;
@@ -1031,6 +1039,10 @@ class PlayerEngine {
   }
 
   public addToQueue(track: Track): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou a adição de faixas à fila.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const newQueue = [...store.queue, track];
     store.setQueue(newQueue);
@@ -1044,6 +1056,10 @@ class PlayerEngine {
   }
 
   public playNext(track: Track): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou a alteração da fila.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const currentQueue = store.queue;
     const currentIndex = store.currentIndex;
@@ -1101,12 +1117,20 @@ class PlayerEngine {
   }
 
   public clearQueue(): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou a limpeza da fila.");
+      return;
+    }
     usePlayerStore.getState().clearQueue();
     this.masterPlaylist = [];
     this.originalUpcomingQueue = [];
   }
 
   public reorderQueue(fromIndex: number, toIndex: number): void {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou a reordenação da fila.");
+      return;
+    }
     const store = usePlayerStore.getState();
     const queue = [...store.queue];
     if (
@@ -1147,6 +1171,10 @@ class PlayerEngine {
   // the playing track is not removable from here: skip it instead
   // returns the undo, or null when nothing was removed
   public removeFromQueue(index: number): (() => void) | null {
+    if (this.jamBridge && !this.jamBridge.canControlPlayback()) {
+      showToast.info("O Host desativou a remoção de faixas da fila.");
+      return null;
+    }
     const store = usePlayerStore.getState();
     if (
       index < 0 ||
@@ -1237,6 +1265,9 @@ class PlayerEngine {
         id: "offline-skip",
         description: translate("offline.skipped_desc"),
       });
+      if (this.jamBridge && !this.jamBridge.isHost()) {
+        return;
+      }
       void this.skipNext(false);
       return;
     }
@@ -1292,6 +1323,9 @@ class PlayerEngine {
           ? `${track.title} — ${track.artists}`
           : track.title,
       });
+    if (this.jamBridge && !this.jamBridge.isHost()) {
+      return;
+    }
     void this.skipNext(false);
   }
 
@@ -1315,6 +1349,7 @@ class PlayerEngine {
     index: number,
     queueLength: number,
   ): void {
+    if (this.jamBridge) return;
     const radio = isRadioContext(usePlayerStore.getState().playbackContext);
     const due = radio
       ? shouldRefillRadio(queueLength, index)

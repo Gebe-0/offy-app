@@ -32,8 +32,9 @@ export function CodeInput({
   ) => {
     const rawVal = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!rawVal) {
-      const next = value.slice(0, index) + value.slice(index + 1);
-      onChange(next);
+      const nextArr = Array.from({ length: 6 }, (_, i) => value[i] || "");
+      nextArr[index] = "";
+      onChange(nextArr.join("").trimEnd());
       return;
     }
 
@@ -44,8 +45,7 @@ export function CodeInput({
     }
 
     const char = rawVal[0]!;
-    const nextArr = value.split("");
-    while (nextArr.length < 6) nextArr.push("");
+    const nextArr = Array.from({ length: 6 }, (_, i) => value[i] || "");
     nextArr[index] = char;
     const nextStr = nextArr.join("").slice(0, 6);
     onChange(nextStr);
@@ -68,12 +68,13 @@ export function CodeInput({
     if (e.key === "Backspace") {
       if (!chars[index] && index > 0) {
         inputRefs.current[index - 1]?.focus();
-        const next = value.slice(0, index - 1) + value.slice(index);
-        onChange(next);
+        const nextArr = Array.from({ length: 6 }, (_, i) => value[i] || "");
+        nextArr[index - 1] = "";
+        onChange(nextArr.join("").trimEnd());
       } else {
-        const nextArr = value.split("");
+        const nextArr = Array.from({ length: 6 }, (_, i) => value[i] || "");
         nextArr[index] = "";
-        onChange(nextArr.join(""));
+        onChange(nextArr.join("").trimEnd());
       }
     } else if (e.key === "ArrowLeft" && index > 0) {
       inputRefs.current[index - 1]?.focus();
@@ -161,7 +162,7 @@ export function CodeInput({
               autoComplete="one-time-code"
               maxLength={1}
               value={char}
-              placeholder="0"
+              placeholder="·"
               disabled={disabled}
               onFocus={(e) => {
                 setFocusedIndex(i);

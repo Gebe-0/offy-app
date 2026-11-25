@@ -10,13 +10,12 @@ const DEEP_LINK_IDS: Record<string, RegExp> = {
   // is always re-encoded before it is placed in the renderer route.
   artist:
     /^(?:UC[A-Za-z0-9_-]{22}|[A-Za-z0-9_-]{1,22}|(?=.*[^A-Za-z0-9_-])[^\p{Cc}/\\]{1,160})(?![\s\S])/u,
-  // innertube album browse ids, e.g. MPREb_xCxkOKReFZv
-  album: /^MPRE[A-Za-z0-9_-]{4,64}$/,
-  // catalog playlists (VLPL…/PL…) and user playlists (uuid / pl-…),
-  // all just opaque tokens from the same safe charset
-  playlist: /^[A-Za-z0-9_-]{8,64}$/,
-  // youtube video ids are always 11 base64url chars
-  track: /^[A-Za-z0-9_-]{11}$/,
+  // innertube album browse ids (MPRE...) or SoundCloud catalog ids (sc:.../sc_...)
+  album: /^(?:MPRE[A-Za-z0-9_-]{4,64}|sc[:_][A-Za-z0-9:_-]{1,64})$/i,
+  // catalog playlists (VLPL…/PL…), user playlists (uuid / pl-…), SoundCloud (sc:.../sc_...), or Spotify (spotify:...)
+  playlist: /^(?:[A-Za-z0-9_-]{8,64}|(?:sc[:_]|spotify:)[A-Za-z0-9:_-]{1,64})$/i,
+  // youtube video ids (11 base64url chars) or SoundCloud catalog ids (sc:.../sc_...)
+  track: /^(?:[A-Za-z0-9_-]{11}|sc[:_][A-Za-z0-9:_-]{1,64})$/i,
   // jam session 6-char code
   jam: /^[A-Za-z0-9]{6}$/,
 };

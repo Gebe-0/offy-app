@@ -20,6 +20,14 @@ describe("parseDeeplink", () => {
       type: "track",
       id: "RGdkabupfPI",
     });
+    expect(parseDeeplink("offy://track?id=sc:123456789")).toEqual({
+      type: "track",
+      id: "sc:123456789",
+    });
+    expect(parseDeeplink("offy://playlist?id=sc_pl_998877")).toEqual({
+      type: "playlist",
+      id: "sc_pl_998877",
+    });
   });
 
   it("accepts artist names used when a track has no channel id", () => {

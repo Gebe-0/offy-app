@@ -147,6 +147,7 @@ describe("finalizeImportedPlaylist", () => {
   >;
 
   it("saves all matched tracks in one bulk request, deduplicated", async () => {
+    vi.spyOn(api, "listPlaylists").mockResolvedValue({ items: [] });
     vi.spyOn(api, "createPlaylist").mockResolvedValue(playlist);
     const bulk = vi
       .spyOn(api, "addPlaylistTrackSnapshots")
@@ -159,6 +160,7 @@ describe("finalizeImportedPlaylist", () => {
   });
 
   it("falls back to per-track adds with snapshots when the bulk endpoint is missing", async () => {
+    vi.spyOn(api, "listPlaylists").mockResolvedValue({ items: [] });
     vi.spyOn(api, "createPlaylist").mockResolvedValue(playlist);
     vi.spyOn(api, "addPlaylistTrackSnapshots").mockRejectedValue(
       new ApiError(404, "Not Found"),

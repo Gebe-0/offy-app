@@ -1,4 +1,12 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { DeeplinkTarget } from "./deeplink";
+
+const queuedDeeplinks: DeeplinkTarget[] = [];
+ipcRenderer.on("deeplink:open", (_event: unknown, target: DeeplinkTarget) => {
+  if (ipcRenderer.listenerCount("deeplink:open") <= 1) {
+    queuedDeeplinks.push(target);
+  }
+});
 import type {
   AuthRefreshResult,
   StoredAuthSession,
@@ -79,10 +87,7 @@ export interface DiscordStatus {
   viaArrpc?: boolean;
 }
 
-export interface DeeplinkTarget {
-  type: "artist" | "album" | "playlist" | "track";
-  id: string;
-}
+export type { DeeplinkTarget };
 
 export interface ElectronCacheStats {
   cacheSize: number;
@@ -439,6 +444,10 @@ const api: LinerElectronApi = {
   onDeeplink: (cb) => {
     const listener = (_event: unknown, target: DeeplinkTarget) => cb(target);
     ipcRenderer.on("deeplink:open", listener);
+    while (queuedDeeplinks.length > 0) {
+      const next = queuedDeeplinks.shift();
+      if (next) cb(next);
+    }
     return () => {
       ipcRenderer.removeListener("deeplink:open", listener);
     };

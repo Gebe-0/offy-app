@@ -337,10 +337,12 @@ export default function AppFrame({ children }: AppFrameProps) {
     }
   }, [isFullscreenPlayer]);
 
+  const prevIsFullScreenRef = useRef(isFullScreen);
   useEffect(() => {
-    if (!isFullScreen && autoElevatedToOsFullscreenRef.current) {
+    if (prevIsFullScreenRef.current && !isFullScreen) {
       autoElevatedToOsFullscreenRef.current = false;
     }
+    prevIsFullScreenRef.current = isFullScreen;
   }, [isFullScreen]);
 
   useEffect(() => {

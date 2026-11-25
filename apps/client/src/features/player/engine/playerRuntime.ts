@@ -1084,11 +1084,14 @@ export class PlayerRuntime {
       this.currentSessionExpiresAt !== null &&
       Date.now() >= this.currentSessionExpiresAt - 15_000;
     const hasMediaError = Boolean(this.audio.error);
+    const matchesCurrentTrack =
+      !this.attachedTrackId || this.attachedTrackId === currentTrack?.id;
     const hasValidSource =
       Boolean(this.audio.src) &&
       this.audio.src !== window.location.href &&
       !isExpired &&
-      !hasMediaError;
+      !hasMediaError &&
+      matchesCurrentTrack;
 
     if (!hasValidSource && currentTrack) {
       void this.loadAndPlay(currentTrack, usePlayerStore.getState().positionMs);

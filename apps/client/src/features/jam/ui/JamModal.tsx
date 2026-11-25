@@ -102,7 +102,10 @@ export default function JamModal() {
             <div className="flex p-[4px] rounded-item bg-fill">
               <button
                 type="button"
-                onClick={() => setTab("create")}
+                onClick={() => {
+                  setTab("create");
+                  useJamStore.setState({ error: null });
+                }}
                 className={`flex-1 h-[34px] rounded-[9px] text-body font-[500] transition-all cursor-pointer border-none ${
                   tab === "create"
                     ? "bg-fill-hover text-text-primary"
@@ -113,7 +116,10 @@ export default function JamModal() {
               </button>
               <button
                 type="button"
-                onClick={() => setTab("join")}
+                onClick={() => {
+                  setTab("join");
+                  useJamStore.setState({ error: null });
+                }}
                 className={`flex-1 h-[34px] rounded-[9px] text-body font-[500] transition-all cursor-pointer border-none ${
                   tab === "join"
                     ? "bg-fill-hover text-text-primary"
@@ -156,7 +162,15 @@ export default function JamModal() {
                   </span>
                   <CodeInput
                     value={inputCode}
-                    onChange={(val) => setInputCode(val)}
+                    onChange={(val) => {
+                      setInputCode(val);
+                      if (error) useJamStore.setState({ error: null });
+                    }}
+                    onComplete={(val) => {
+                      void joinJam(val).then((ok) => {
+                        if (ok) setInputCode("");
+                      });
+                    }}
                     disabled={isConnecting}
                   />
                   <span className="text-[12px] text-text-secondary/70">
@@ -260,11 +274,19 @@ export default function JamModal() {
                     className="flex items-center justify-between px-[10px] py-[8px] rounded-[10px] bg-fill"
                   >
                     <div className="flex items-center gap-[8px]">
-                      <div className="w-[30px] h-[30px] rounded-full bg-fill-hover flex items-center justify-center text-[12px] font-bold text-text-primary">
-                        {p.displayName.slice(0, 1).toUpperCase()}
-                      </div>
+                      {p.avatarUrl ? (
+                        <img
+                          src={p.avatarUrl}
+                          alt={p.displayName || "Membro"}
+                          className="w-[30px] h-[30px] rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-[30px] h-[30px] rounded-full bg-fill-hover flex items-center justify-center text-[12px] font-bold text-text-primary">
+                          {(p.displayName || "M").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
                       <span className="text-[13px] font-medium text-text-primary">
-                        {p.displayName}
+                        {p.displayName || "Membro"}
                       </span>
                     </div>
                     {p.isHost && (

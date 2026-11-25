@@ -398,7 +398,7 @@ export function renderShareHtml(
       </div>
 
       <p class="notice">
-        Conectando ao aplicativo instalado.
+        Se o app não abrir automaticamente, clique em <strong>Abrir no OFFY</strong> acima.
       </p>
     </section>
 
@@ -407,7 +407,11 @@ export function renderShareHtml(
     </footer>
   </main>
 
-  ${autoRedirect ? `<script>window.location.href = ${JSON.stringify(appDeepLink)};</script>` : ""}
+  ${
+    autoRedirect
+      ? `<script>setTimeout(function () { window.location.href = ${JSON.stringify(appDeepLink)}; }, 150);</script>`
+      : ""
+  }
 </body>
 </html>`;
 }

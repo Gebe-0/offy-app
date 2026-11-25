@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getApiBaseUrl } from "@/shared/api/baseUrl";
 import { getValidAccessToken, getAuthSession } from "@/shared/api/auth-session";
+import { getServerTimeOffset } from "@/shared/api/requestSigner";
 import { toClientTrack } from "@/shared/api/track";
 import { showToast } from "@/shared/ui";
 import { usePlayerStore, playerEngine, playerRuntime } from "@/features/player";
@@ -160,7 +161,8 @@ export const useJamStore = create<JamState>((set, get) => ({
     } catch {
       // ignore url error
     }
-    const match = text.match(/([A-Z0-9]{6})/i);
+    const match =
+      text.match(/([A-HJ-NP-Z2-9]{6})/i) || text.match(/([A-Z0-9]{6})/i);
     const cleanCode = (match ? match[1]! : text.replace(/[^A-Z0-9]/g, ""))
       .toUpperCase()
       .slice(0, 6);
@@ -279,7 +281,7 @@ export const useJamStore = create<JamState>((set, get) => ({
       const token = await getValidAccessToken();
       if (!token) return;
 
-      await fetch(`${getApiBaseUrl()}/v1/jam/${code}/settings`, {
+      const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}/settings`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -287,6 +289,9 @@ export const useJamStore = create<JamState>((set, get) => ({
         },
         body: JSON.stringify({ allowGuestControl }),
       });
+      if (!res.ok) {
+        throw new Error("Falha ao salvar configurações");
+      }
       showToast.checkmark(
         allowGuestControl
           ? "Convidados agora podem alterar e pausar músicas."
@@ -295,11 +300,74 @@ export const useJamStore = create<JamState>((set, get) => ({
     } catch {
       // rollback if failed
       set({ allowGuestControl: !allowGuestControl });
+      showToast.error("Não foi possível atualizar as configurações da Jam.");
     }
   },
 
-  addToQueue: async () => {},
-  removeFromQueue: async () => {},
+  addToQueue: async (track: Track) => {
+    const { code, isHost, allowGuestControl } = get();
+    if (!code) return;
+    if (!isHost && !allowGuestControl) {
+      showToast.info("O Host desativou a adição de faixas à fila.");
+      return;
+    }
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+
+      const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}/queue`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ track }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.queue) {
+          set({ queue: data.queue.map(toClientTrack) });
+        }
+        showToast.checkmark("Adicionado à fila da Jam!");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast.error(err.message || "Não foi possível adicionar à fila.");
+      }
+    } catch {
+      showToast.error("Erro de conexão ao adicionar à fila.");
+    }
+  },
+
+  removeFromQueue: async (trackId: string) => {
+    const { code, isHost, allowGuestControl } = get();
+    if (!code) return;
+    if (!isHost && !allowGuestControl) {
+      showToast.info("O Host restringiu o gerenciamento da fila.");
+      return;
+    }
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+
+      const res = await fetch(
+        `${getApiBaseUrl()}/v1/jam/${code}/queue/${encodeURIComponent(trackId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.queue) {
+          set({ queue: data.queue.map(toClientTrack) });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  },
 
   leaveJam: async () => {
     const currentCode = get().code;
@@ -462,12 +530,14 @@ function startRealtimeSync(code: string, token: string) {
   });
 
   es.onerror = () => {
-    // Se a conexão cair ou o token de acesso expirar, reconecta com token renovado
+    // Se a conexão cair ou fechar, reconecta com token renovado evitando loop cego
     if (es.readyState === EventSource.CLOSED) {
       void getValidAccessToken().then((freshToken) => {
         const currentCode = useJamStore.getState().code;
         if (currentCode && freshToken) {
           startRealtimeSync(currentCode, freshToken);
+        } else if (!freshToken) {
+          useJamStore.getState().leaveJam();
         }
       });
     }
@@ -480,6 +550,11 @@ function startRealtimeSync(code: string, token: string) {
 
     try {
       const res = await fetch(`${getApiBaseUrl()}/v1/jam/${code}`);
+      if (res.status === 404) {
+        useJamStore.getState().leaveJam();
+        showToast.info("A sessão de Jam não existe mais.");
+        return;
+      }
       if (res.ok) {
         const data = (await res.json()) as { ok: boolean; room: JamRoomState };
         if (data.room) {
@@ -495,13 +570,14 @@ function startRealtimeSync(code: string, token: string) {
             const status = usePlayerStore.getState().status;
 
             const clientTrack = toClientTrack(data.room.currentTrack);
+            const now = Date.now() + getServerTimeOffset();
             const elapsed =
               data.room.status === "playing"
-                ? Math.max(0, Date.now() - data.room.updatedAt)
+                ? Math.max(0, now - data.room.updatedAt)
                 : 0;
             const expectedPos = data.room.positionMs + elapsed;
 
-            // Se a música for diferente ou houver drift maior que 4.5 segundos
+            // Se a música for diferente ou houver drift maior que 3.5 segundos
             if (currentTrack?.id !== clientTrack.id) {
               syncRemoteTrack(
                 clientTrack,
@@ -510,7 +586,7 @@ function startRealtimeSync(code: string, token: string) {
                 data.room.updatedAt,
               );
             } else if (
-              Math.abs(currentPos - expectedPos) > 4500 &&
+              Math.abs(currentPos - expectedPos) > 3500 &&
               status === "playing"
             ) {
               setRemoteSyncingState(true, 1500);
@@ -518,6 +594,7 @@ function startRealtimeSync(code: string, token: string) {
             } else if (status !== data.room.status) {
               setRemoteSyncingState(true, 1500);
               if (data.room.status === "playing") {
+                playerRuntime?.seek(expectedPos);
                 playerRuntime?.resume();
               } else if (data.room.status === "paused") {
                 playerRuntime?.pause();
@@ -577,9 +654,9 @@ function syncRemoteTrack(
   updatedAt: number,
 ) {
   if (!track || !track.id) return;
-  setRemoteSyncingState(true, 2500);
+  setRemoteSyncingState(true, 3000);
 
-  const now = Date.now();
+  const now = Date.now() + getServerTimeOffset();
   const elapsed = status === "playing" ? Math.max(0, now - updatedAt) : 0;
   const targetPos = Math.max(0, positionMs + elapsed);
 
@@ -589,7 +666,7 @@ function syncRemoteTrack(
 
   // Se já estamos tocando essa mesma faixa, sincroniza tempo / reprodução
   if (currentTrack?.id === track.id) {
-    if (Math.abs(currentPos - targetPos) > 2500) {
+    if (Math.abs(currentPos - targetPos) > 2000) {
       playerRuntime?.seek(targetPos);
     }
     if (
@@ -669,12 +746,13 @@ function handleRemoteSync(event: JamSyncEvent) {
     return;
   }
 
+  const now = Date.now() + getServerTimeOffset();
   const elapsed =
-    event.status === "playing" ? Math.max(0, Date.now() - event.updatedAt) : 0;
+    event.status === "playing" ? Math.max(0, now - event.updatedAt) : 0;
   const targetPos = Math.max(0, event.positionMs + elapsed);
 
   if (event.action === "PLAY") {
-    if (Math.abs(currentPos - targetPos) > 2500) {
+    if (Math.abs(currentPos - targetPos) > 2000) {
       usePlayerStore.getState().setPosition(targetPos);
       playerRuntime?.seek(targetPos);
     }
@@ -760,7 +838,13 @@ if (typeof window !== "undefined") {
     if (!code || isHost) return;
 
     void fetch(`${getApiBaseUrl()}/v1/jam/${code}`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (res.status === 404) {
+          useJamStore.getState().leaveJam();
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then((data: any) => {
         if (!data?.room) return;
         useJamStore.setState({
@@ -775,9 +859,10 @@ if (typeof window !== "undefined") {
           const status = usePlayerStore.getState().status;
 
           const clientTrack = toClientTrack(data.room.currentTrack);
+          const now = Date.now() + getServerTimeOffset();
           const elapsed =
             data.room.status === "playing"
-              ? Math.max(0, Date.now() - data.room.updatedAt)
+              ? Math.max(0, now - data.room.updatedAt)
               : 0;
           const expectedPos = data.room.positionMs + elapsed;
 
@@ -796,8 +881,12 @@ if (typeof window !== "undefined") {
             playerRuntime?.seek(expectedPos);
           } else if (status !== data.room.status) {
             setRemoteSyncingState(true, 1500);
-            if (data.room.status === "playing") playerRuntime?.resume();
-            else if (data.room.status === "paused") playerRuntime?.pause();
+            if (data.room.status === "playing") {
+              playerRuntime?.seek(expectedPos);
+              playerRuntime?.resume();
+            } else if (data.room.status === "paused") {
+              playerRuntime?.pause();
+            }
           }
         }
       })

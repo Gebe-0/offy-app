@@ -59,7 +59,7 @@ function throttle(ip: string, maxAttempts: number, windowMs = 60_000): void {
     return;
   }
   if (entry.count >= maxAttempts) {
-    throw new ApiError(429, "TOO_MANY_REQUESTS", "Muitas tentativas. Aguarde um minuto.");
+    throw new ApiError(429, "Muitas tentativas. Aguarde um minuto.", "TOO_MANY_REQUESTS");
   }
   entry.count += 1;
 }

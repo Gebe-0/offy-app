@@ -147,10 +147,13 @@ let snapPreview: BaseWindow | null = null;
 // compositor-driven preview (native add-on); preferred over snapPreview when built
 let nativeSnap: NativeSnapPreview | null = null;
 
+let isWindowFullScreen = false;
+
 function syncResizable() {
   if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed())
     return;
-  const locked = mainWindow.isMaximized() || mainWindow.isFullScreen();
+  const locked =
+    mainWindow.isMaximized() || isWindowFullScreen || mainWindow.isFullScreen();
   if (mainWindow.isResizable() === locked) mainWindow.setResizable(!locked);
 }
 
@@ -275,7 +278,7 @@ function createWindow() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.send("window:state-changed", {
       isMaximized: mainWindow.isMaximized(),
-      isFullScreen: mainWindow.isFullScreen(),
+      isFullScreen: isWindowFullScreen || mainWindow.isFullScreen(),
       isVisible: mainWindow.isVisible() && !mainWindow.isMinimized(),
     });
   };
@@ -288,8 +291,25 @@ function createWindow() {
   };
   mainWindow.on("maximize", onMaximizeStateChanged);
   mainWindow.on("unmaximize", onMaximizeStateChanged);
-  mainWindow.on("enter-full-screen", onMaximizeStateChanged);
-  mainWindow.on("leave-full-screen", onMaximizeStateChanged);
+  mainWindow.on("enter-full-screen", () => {
+    isWindowFullScreen = true;
+    onMaximizeStateChanged();
+  });
+  mainWindow.on("leave-full-screen", () => {
+    isWindowFullScreen = false;
+    onMaximizeStateChanged();
+    // On Windows with frameless windows, when leaving fullscreen after being maximized,
+    // ensure the window bounds re-dock strictly to the display's workArea so the taskbar is visible.
+    if (process.platform === "win32" && mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMaximized()) {
+        const display = screen.getDisplayMatching(mainWindow.getBounds());
+        const bounds = mainWindow.getBounds();
+        if (bounds.height >= display.bounds.height) {
+          mainWindow.setBounds(display.workArea);
+        }
+      }
+    }
+  });
   // transparent windows "maximize" by filling the work area, so catch it on resize too
   mainWindow.on("resize", syncResizable);
 
@@ -645,7 +665,8 @@ if (!gotTheLock) {
       if (process.platform === "darwin") {
         mainWindow.setFullScreen(!mainWindow.isFullScreen());
       } else {
-        if (mainWindow.isFullScreen()) {
+        if (isWindowFullScreen || mainWindow.isFullScreen()) {
+          isWindowFullScreen = false;
           mainWindow.setFullScreen(false);
         } else if (mainWindow.isMaximized()) {
           unmaximizeWindow();
@@ -656,18 +677,19 @@ if (!gotTheLock) {
     });
 
     ipcMain.handle("window:toggle-fullscreen", () => {
-      if (!mainWindow) return;
-      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      isWindowFullScreen = !isWindowFullScreen;
+      mainWindow.setFullScreen(isWindowFullScreen);
     });
 
     ipcMain.handle("window:set-fullscreen", (_event, flag: boolean) => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
       if (typeof flag === "boolean") {
-        if (mainWindow.isFullScreen() !== flag) {
-          mainWindow.setFullScreen(flag);
-        }
+        isWindowFullScreen = flag;
+        mainWindow.setFullScreen(flag);
       } else {
-        mainWindow.setFullScreen(!mainWindow.isFullScreen());
+        isWindowFullScreen = !isWindowFullScreen;
+        mainWindow.setFullScreen(isWindowFullScreen);
       }
     });
 
@@ -680,7 +702,8 @@ if (!gotTheLock) {
     });
 
     ipcMain.handle("window:is-fullscreen", () => {
-      return mainWindow?.isFullScreen() ?? false;
+      if (!mainWindow || mainWindow.isDestroyed()) return false;
+      return isWindowFullScreen || mainWindow.isFullScreen();
     });
 
     ipcMain.handle("app:get-version", () => {
