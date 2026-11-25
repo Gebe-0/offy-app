@@ -39,7 +39,8 @@
       {
         "provider": "github",
         "owner": "Gebe-0",
-        "repo": "offy-app"
+        "repo": "offy-app",
+        "releaseType": "release"
       }
     ],
     "directories": {
