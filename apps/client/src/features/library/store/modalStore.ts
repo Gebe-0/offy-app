@@ -111,6 +111,12 @@ interface ModalState {
   openSettings: () => void;
   closeSettings: () => void;
   toggleSettings: () => void;
+
+  // Profile & Friends modal
+  profileOpen: boolean;
+  profileTargetId: string;
+  openProfile: (targetId?: string) => void;
+  closeProfile: () => void;
 }
 
 export const useModalStore = create<ModalState>((set) => ({
@@ -198,4 +204,10 @@ export const useModalStore = create<ModalState>((set) => ({
   openSettings: () => set({ settingsOpen: true }),
   closeSettings: () => set({ settingsOpen: false }),
   toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
+
+  profileOpen: false,
+  profileTargetId: "me",
+  openProfile: (targetId = "me") =>
+    set({ profileOpen: true, profileTargetId: targetId }),
+  closeProfile: () => set({ profileOpen: false }),
 }));

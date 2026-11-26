@@ -5,7 +5,7 @@ import { Tooltip } from "@/shared/ui";
 
 export function SidebarProfileButton() {
   const user = useAuthStore((state) => state.user);
-  const toggleSettings = useModalStore((state) => state.toggleSettings);
+  const openProfile = useModalStore((state) => state.openProfile);
 
   const label = user?.displayName || user?.username || "Perfil";
   const initial = (label.trim()[0] || "U").toUpperCase();
@@ -15,7 +15,7 @@ export function SidebarProfileButton() {
     <Tooltip content={label} side="right" sideOffset={12}>
       <button
         type="button"
-        onClick={toggleSettings}
+        onClick={() => openProfile("me")}
         aria-label={label}
         className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-white/[0.08] bg-white/[0.07] p-0 text-[15px] font-[600] text-text-primary cursor-pointer transition-all duration-150 hover:bg-white/[0.12] active:scale-[0.95]"
       >

@@ -14,6 +14,7 @@ import { registerPresenceRoutes } from "./routes/presence.js";
 import { registerJamRoutes } from "./routes/jam.js";
 import { registerDocsRoutes } from "./routes/docs.js";
 import { registerShareRoutes, renderNotFoundHtml, renderShareHtml } from "./routes/share.js";
+import { registerFriendsRoutes } from "./routes/friends.js";
 import { sendError } from "./http.js";
 
 const app = Fastify({
@@ -81,6 +82,7 @@ await app.register(registerCatalogRoutes);
 await app.register(registerLibraryRoutes);
 await app.register(registerPlaylistRoutes);
 await app.register(registerUserRoutes);
+await app.register(registerFriendsRoutes);
 await app.register(registerHistoryRoutes);
 await app.register(registerLyricsRoutes);
 await app.register(registerRecommendationRoutes);

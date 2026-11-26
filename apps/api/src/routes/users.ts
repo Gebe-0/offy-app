@@ -84,6 +84,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         ["display_name", "displayName"],
         ["avatar_url", "avatarUrl"],
         ["bio", "bio"],
+        ["discord_handle", "discordHandle"],
       ];
       for (const [column, key] of textFields) {
         if (key in body) {
