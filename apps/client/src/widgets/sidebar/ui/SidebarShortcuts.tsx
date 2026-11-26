@@ -23,7 +23,7 @@ export function SidebarShortcuts() {
     <div className="flex flex-1 min-h-0 w-full flex-col items-center">
       <div className="my-[12px] h-px w-[24px] shrink-0 bg-white/[0.1]" />
 
-      <div className="flex flex-1 min-h-0 w-full flex-col items-center gap-[10px] overflow-y-auto px-[6px] pb-[8px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-1 min-h-0 w-full flex-col items-center gap-[10px] overflow-y-auto px-[6px] pt-[4px] pb-[8px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Liked Songs */}
         <Tooltip
           content={t("library.liked_songs") || "Músicas Curtidas"}
