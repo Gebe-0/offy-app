@@ -14,35 +14,140 @@ const OFFY_LOGO_SVG = `<svg class="brand-glyph" viewBox="0 0 593 518" fill="none
   <path d="M 226 19 L 186 52 L 159 98 L 152 125 L 151 156 L 161 199 L 176 197 L 201 183 L 253 116 L 283 102 L 308 104 L 321 112 L 331 124 L 337 138 L 339 162 L 329 194 L 310 216 L 285 226 L 262 225 L 193 209 L 147 208 L 99 219 L 60 241 L 35 265 L 21 285 L 4 330 L 3 379 L 10 405 L 21 428 L 37 450 L 65 475 L 88 488 L 120 498 L 152 499 L 174 494 L 238 458 L 259 452 L 278 452 L 296 457 L 356 495 L 405 513 L 457 513 L 509 494 L 533 477 L 552 458 L 569 434 L 587 387 L 589 342 L 579 303 L 558 267 L 525 237 L 486 219 L 462 214 L 437 214 L 434 225 L 433 254 L 439 278 L 449 295 L 482 330 L 492 359 L 490 376 L 483 391 L 472 404 L 457 413 L 438 417 L 415 414 L 385 401 L 326 366 L 282 356 L 258 358 L 231 366 L 175 399 L 155 407 L 126 404 L 102 382 L 97 366 L 101 338 L 117 316 L 141 301 L 182 294 L 216 300 L 279 319 L 315 320 L 334 316 L 371 297 L 394 275 L 415 245 L 426 221 L 437 177 L 437 130 L 427 91 L 402 50 L 365 19 L 322 3 L 275 2 Z" fill="#ededed" fill-rule="evenodd"/>
 </svg>`;
 
+const metaCache = new Map<string, { meta: EntityMeta; expiresAt: number }>();
+const META_CACHE_TTL_MS = 60 * 60 * 1000;
+
+function extractMetaTag(html: string, property: string): string | null {
+  const re = new RegExp(
+    `<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']+)["']`,
+    "i",
+  );
+  const match = html.match(re);
+  if (match?.[1]) return match[1];
+  const rev = new RegExp(
+    `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${property}["']`,
+    "i",
+  );
+  return html.match(rev)?.[1] ?? null;
+}
+
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'");
+}
+
+async function fetchExternalMeta(
+  type: ShareEntityType,
+  id: string,
+  meta: EntityMeta,
+): Promise<EntityMeta> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    if (type === "track" && /^[A-Za-z0-9_-]{11}$/.test(id)) {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`,
+        { signal: controller.signal },
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          title?: string;
+          author_name?: string;
+          thumbnail_url?: string;
+        };
+        if (data.title) meta.title = data.title;
+        if (data.author_name) meta.subtitle = data.author_name.replace(/\s*-\s*Topic$/i, "");
+        meta.coverUrl = data.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+      } else {
+        meta.coverUrl = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+      }
+      return meta;
+    }
+
+    let targetUrl: string | null = null;
+    if (type === "artist" && /^UC[A-Za-z0-9_-]{22}$/.test(id)) {
+      targetUrl = `https://www.youtube.com/channel/${id}`;
+    } else if (type === "album" && /^MPRE[A-Za-z0-9_-]{4,64}$/.test(id)) {
+      targetUrl = `https://music.youtube.com/browse/${id}`;
+    } else if (type === "playlist" && /^(?:VL)?PL[A-Za-z0-9_-]+$/.test(id)) {
+      const listId = id.startsWith("VL") ? id.slice(2) : id;
+      targetUrl = `https://www.youtube.com/playlist?list=${listId}`;
+    }
+
+    if (targetUrl) {
+      const res = await fetch(targetUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        },
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const ogTitle = extractMetaTag(html, "og:title");
+        const ogImage = extractMetaTag(html, "og:image");
+        if (ogTitle) {
+          const clean = decodeHtmlEntities(ogTitle)
+            .replace(/\s*-\s*YouTube(?:\s+Music)?$/i, "")
+            .replace(/\s*-\s*Topic$/i, "")
+            .trim();
+          if (clean) meta.title = clean;
+        }
+        if (ogImage) meta.coverUrl = decodeHtmlEntities(ogImage);
+      }
+    }
+  } catch {
+    // fallback gracioso
+  } finally {
+    clearTimeout(timer);
+  }
+  return meta;
+}
+
 async function resolveEntityMeta(
   type: ShareEntityType,
   id: string,
 ): Promise<EntityMeta> {
+  const cacheKey = `${type}:${id}`;
+  const cached = metaCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.meta;
+  }
+
   const meta: EntityMeta = {
     title: id,
     subtitle: "OFFY Music Player",
     badge: type === "track" ? "Faixa" : type === "playlist" ? "Playlist" : type === "album" ? "Álbum" : "Artista",
   };
 
+  let resolvedFromDb = false;
+
   try {
     if (type === "track") {
       meta.badge = "Faixa";
       const rows = await sql`select title, artists, cover_url from tracks where id = ${id} limit 1`;
-      if (rows.length > 0) {
-        meta.title = rows[0].title || id;
+      if (rows.length > 0 && rows[0].title) {
+        meta.title = rows[0].title;
         meta.subtitle = rows[0].artists || "OFFY Music";
         meta.coverUrl = rows[0].cover_url || null;
+        resolvedFromDb = true;
       }
     } else if (type === "playlist") {
       meta.badge = "Playlist";
       const rows = await sql`select title, description from playlists where id::text = ${id} and is_public = true limit 1`;
-      if (rows.length > 0) {
-        meta.title = rows[0].title || id;
+      if (rows.length > 0 && rows[0].title) {
+        meta.title = rows[0].title;
         meta.subtitle = rows[0].description || "Playlist curada no OFFY";
+        resolvedFromDb = true;
       }
     } else if (type === "album") {
       meta.badge = "Álbum";
-      meta.title = id;
       meta.subtitle = "Álbum no OFFY";
     } else if (type === "artist") {
       meta.badge = "Artista";
@@ -53,6 +158,12 @@ async function resolveEntityMeta(
     // Fallback gracioso
   }
 
+  if (!resolvedFromDb) {
+    await fetchExternalMeta(type, id, meta);
+  }
+
+  if (metaCache.size > 500) metaCache.clear();
+  metaCache.set(cacheKey, { meta, expiresAt: Date.now() + META_CACHE_TTL_MS });
   return meta;
 }
 

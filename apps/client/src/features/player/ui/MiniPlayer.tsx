@@ -199,6 +199,14 @@ function extractColorsFromCanvas(
   };
 }
 
+function formatMiniTime(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0:00";
+  const totalSec = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
 export interface MiniPlayerProps {
   onQueueOpenChange?: (open: boolean) => void;
   onQueueToggle?: () => void;
@@ -640,118 +648,20 @@ function MiniPlayer({
       </AnimatePresence>
 
       <div
-        className={`relative h-[64px] w-full overflow-hidden cursor-pointer ${
-          usesRoundedStyle
-            ? "rounded-full border-[0.5px] border-border-tertiary bg-bg-primary"
-            : embedded
-              ? `rounded-item ${
-                  hasPageBackdrop
-                    ? "bg-bg-glass dark:bg-black/20 backdrop-blur-[48px] backdrop-saturate-150"
-                    : "bg-bg-primary"
-                }`
-              : "rounded-3xl border-[0.5px] border-border-tertiary bg-bg-primary"
+        className={`relative h-[76px] w-full overflow-hidden ${
+          isLight
+            ? "rounded-[16px] border border-black/[0.08] bg-bg-primary"
+            : "rounded-[16px] border border-white/[0.06] bg-[#0b0d0b]"
         }`}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          const target = e.target as Element | null;
-          if (
-            !target ||
-            target.closest?.(
-              "button, a, input, [role='button'], [role='slider'], .prevent-seek",
-            )
-          ) {
-            return;
-          }
-          const card = e.currentTarget;
-          const rect = card.getBoundingClientRect();
-          if (!rect.width || !durationMs) return;
-
-          const calcRatio = (clientX: number) =>
-            Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-
-          const initialRatio = calcRatio(e.clientX);
-          setScrubRatio(initialRatio);
-
-          const onMove = (ev: PointerEvent) => {
-            const r = calcRatio(ev.clientX);
-            setScrubRatio(r);
-          };
-
-          const onUp = (ev: PointerEvent) => {
-            const finalRatio = calcRatio(ev.clientX);
-            setScrubRatio(null);
-            playerEngine.seek(finalRatio * durationMs);
-            window.removeEventListener("pointermove", onMove);
-            window.removeEventListener("pointerup", onUp);
-            window.removeEventListener("pointercancel", onUp);
-          };
-
-          window.addEventListener("pointermove", onMove);
-          window.addEventListener("pointerup", onUp);
-          window.addEventListener("pointercancel", onUp);
-        }}
       >
-        {usesBackgroundProgress && (
+        <div className="relative grid h-full grid-cols-[minmax(180px,1fr)_minmax(300px,540px)_minmax(210px,1fr)] items-center gap-[16px] px-[14px]">
+          {/* Left: Cover + Track Info + Like */}
           <div
-            className="absolute inset-0 z-0 pointer-events-none origin-left"
-            style={{
-              backgroundColor: accentColor,
-              transform: `scaleX(${activeProgress})`,
-              transition:
-                scrubRatio !== null
-                  ? "none"
-                  : isPlaying && !progressJumped
-                    ? `transform ${PROGRESS_STEP_MS}ms linear`
-                    : PROGRESS_JUMP_TRANSITION,
-            }}
-          />
-        )}
-
-        {embedded ? null : (
-          <div
-            className={`absolute z-30 prevent-seek ${
-              usesRoundedStyle
-                ? "left-[18px] right-[18px] bottom-[2px]"
-                : "left-[8px] right-[8px] bottom-[2px]"
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <TimelineSlider
-              positionMs={player.positionMs}
-              durationMs={durationMs}
-              onSeek={(pos) => playerEngine.seek(pos)}
-              size="xs"
-              fillColor={accentColorSolid || undefined}
-              fillClassName={
-                !accentColorSolid
-                  ? isLight
-                    ? "bg-text-primary"
-                    : "bg-white"
-                  : undefined
-              }
-              trackBg={
-                isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.15)"
-              }
-              trackActiveBg={
-                isLight ? "rgba(0, 0, 0, 0.16)" : "rgba(255, 255, 255, 0.32)"
-              }
-              className="!h-[14px]"
-            />
-          </div>
-        )}
-        <div
-          className={`relative grid h-full pointer-events-none ${
-            embedded
-              ? "grid-cols-[280px_minmax(0,1fr)_260px]"
-              : "grid-cols-[286px_minmax(0,1fr)]"
-          } ${!usesRoundedStyle && !embedded ? "pb-[4px]" : ""}`}
-        >
-          <div
-            className="flex h-full items-center gap-[16px] px-[18px] pt-[1px] pointer-events-none cursor-default"
+            className="flex min-w-0 items-center gap-[12px]"
             onContextMenu={handleTrackContextMenu}
           >
             {trackMenuPosition && (
-              <div className="absolute h-0 w-0 pointer-events-auto">
+              <div className="absolute h-0 w-0">
                 <DropdownMenu
                   trigger={<span />}
                   items={trackMenuItems}
@@ -767,41 +677,33 @@ function MiniPlayer({
               role="button"
               tabIndex={0}
               aria-label="Open player"
-              className={`relative h-[38px] w-[38px] shrink-0 overflow-hidden rounded-control bg-bg-elevated cursor-pointer pointer-events-auto prevent-seek ${
+              className={`relative h-[48px] w-[48px] shrink-0 overflow-hidden rounded-[10px] bg-bg-elevated cursor-pointer ${
                 coverUrl && !isCoverLoaded ? "animate-pulse" : ""
               }`}
               onClick={onFullscreenOpen}
-              onPointerDown={(e) => e.stopPropagation()}
             >
               <CoverImage
                 key={coverUrl}
                 src={coverUrl}
                 alt="Track artwork"
-                width={38}
-                height={38}
+                width={48}
+                height={48}
                 priority
                 draggable={false}
                 onLoad={(e) => {
                   extractAccentColor(e.currentTarget as HTMLImageElement);
                 }}
-                className="h-[38px] w-[38px] object-cover rounded-control"
+                className="h-[48px] w-[48px] object-cover rounded-[10px]"
               />
             </div>
-            <div className="flex min-w-0 flex-col pointer-events-none">
-              <p
-                className="m-0 truncate text-[16px] font-[400] text-text-primary flex items-center gap-[6px] pointer-events-none"
-                style={{
-                  lineHeight: "18px",
-                  letterSpacing: "0",
-                }}
-              >
+            <div className="flex min-w-0 flex-col">
+              <p className="m-0 truncate text-[14.5px] font-[500] leading-[18px] text-text-primary">
                 <span
                   role="button"
                   tabIndex={0}
                   aria-label="Open player"
-                  className="min-w-0 truncate cursor-pointer pointer-events-auto prevent-seek"
+                  className="cursor-pointer hover:underline"
                   onClick={onFullscreenOpen}
-                  onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -812,32 +714,18 @@ function MiniPlayer({
                   {trackTitle}
                 </span>
               </p>
-              <p
-                className="m-0 mt-[4px] flex min-w-0 items-center gap-[5px] text-body font-[300] text-text-tertiary pointer-events-none"
-                style={{
-                  lineHeight: "15px",
-                }}
-              >
+              <p className="m-0 mt-[3px] flex min-w-0 items-center gap-[5px] text-[12.5px] font-[400] leading-[15px] text-text-tertiary">
                 {player.currentTrack?.explicit && (
-                  <span className="inline-flex h-[14px] w-[14px] shrink-0 -translate-y-px items-center justify-center rounded-[3.5px] bg-fill-strong text-[8px] font-[600] leading-none text-text-secondary">
-                    <span className="translate-y-[0.5px] [text-box:trim-both_cap_alphabetic]">
-                      E
-                    </span>
+                  <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-[3.5px] bg-fill-strong text-[8px] font-[600] leading-none text-text-secondary">
+                    E
                   </span>
-                )}
-                {!isLocal && (
-                  <ArtistAvatar
-                    artistId={player.currentTrack?.artistId}
-                    artistList={player.currentTrack?.artistList}
-                    size={15}
-                  />
                 )}
                 <ArtistLink
                   name={trackArtists}
                   artistId={player.currentTrack?.artistId}
                   artistList={player.currentTrack?.artistList}
                   plain={isLocal}
-                  className="text-text-tertiary pointer-events-auto"
+                  className="truncate text-text-tertiary"
                 />
               </p>
             </div>
@@ -845,12 +733,11 @@ function MiniPlayer({
               <button
                 type="button"
                 aria-label={isLiked ? "Unlike" : "Like"}
-                className={`${iconButtonClass} shrink-0 transition-colors duration-150 pointer-events-auto prevent-seek ${
+                className={`${iconButtonClass} ml-[4px] shrink-0 transition-colors duration-150 ${
                   isLiked
                     ? "text-accent-primary"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={handleLikeToggle}
                 style={{ cursor: "pointer" }}
               >
@@ -861,25 +748,15 @@ function MiniPlayer({
                   transition={{ type: "spring", stiffness: 500, damping: 15 }}
                   className="flex items-center justify-center"
                 >
-                  {isLiked ? <HeartFill size={20} /> : <HeartLine size={20} />}
+                  {isLiked ? <HeartFill size={18} /> : <HeartLine size={18} />}
                 </motion.span>
               </button>
             )}
           </div>
 
-          <div
-            className={`flex h-full items-center pl-[10px] pr-[18px] pointer-events-none ${
-              embedded ? "col-start-3" : ""
-            }`}
-          >
-            <div
-              className={`ml-auto flex items-center gap-[2px] rounded-lg p-[3px] pointer-events-auto prevent-seek cursor-default ${
-                hasPageBackdrop
-                  ? "bg-fill-subtle"
-                  : "bg-[#ebebed] dark:bg-[#141414]"
-              }`}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
+          {/* Center: Transport Controls + Timeline with Timestamps */}
+          <div className="flex w-full flex-col items-center justify-center gap-[4px]">
+            <div className="flex items-center justify-center gap-[14px]">
               <button
                 type="button"
                 aria-label="Shuffle"
@@ -889,24 +766,76 @@ function MiniPlayer({
                     : t("player.shuffle_off")
                 }
                 className={`${iconButtonClass} ${
-                  player.shuffle ? activeToggleClass : ""
+                  player.shuffle ? activeToggleClass : "text-text-secondary hover:text-text-primary"
                 }`}
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => playerEngine.setShuffle(!player.shuffle)}
               >
-                <Shuffle size={18} weight="Outline" />
+                <Shuffle size={17} weight="Outline" />
+              </button>
+              <button
+                type="button"
+                aria-label="Previous track"
+                className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+                onClick={() => {
+                  void playerEngine.skipPrevious();
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <SkipPrevious size={19} weight="Bold" />
+              </button>
+              <button
+                type="button"
+                aria-label={isPlaying ? "Pause" : "Play"}
+                className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-transform duration-150 ease-out hover:scale-105 active:scale-[0.95] border-none cursor-pointer shadow-sm"
+                onClick={() => {
+                  void playerEngine.togglePlayPause();
+                }}
+                style={{
+                  backgroundColor: accentColorSolid || (isLight ? "#171717" : "#e2f5c8"),
+                  color: isLight ? "#ffffff" : "#0b0d0b",
+                }}
+              >
+                <span className="relative flex h-[17px] w-[17px] items-center justify-center">
+                  <span
+                    className={`absolute inset-0 flex items-center justify-center ${
+                      isLoading ? "opacity-0" : ""
+                    } transition-transform ${
+                      isPlaying ? "" : "translate-x-[1px]"
+                    }`}
+                  >
+                    <PlayerMorphIcon
+                      icon={isPlaying ? ICON_PAUSE : ICON_PLAY}
+                      size={17}
+                    />
+                  </span>
+                  {isLoading && (
+                    <span
+                      className="absolute h-[16px] w-[16px] animate-spin rounded-full border-[2px] border-current border-t-transparent"
+                      aria-label="Loading playback"
+                    />
+                  )}
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label="Next track"
+                className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+                onClick={() => {
+                  void playerEngine.skipNext();
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <SkipNext size={19} weight="Bold" />
               </button>
               <button
                 type="button"
                 aria-label={repeatLabel}
                 title={repeatLabel}
                 className={`${iconButtonClass} ${
-                  player.repeat !== "off" ? activeToggleClass : ""
+                  player.repeat !== "off" ? activeToggleClass : "text-text-secondary hover:text-text-primary"
                 }`}
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={() =>
                   playerEngine.setRepeat(
-                    // radio has no repeat-all: it refills instead of looping
                     nextRepeatMode(
                       player.repeat,
                       isRadioContext(player.playbackContext),
@@ -916,101 +845,124 @@ function MiniPlayer({
               >
                 {repeatIcon}
               </button>
-              <button
-                ref={eqToggleRef}
-                type="button"
-                aria-label={t("player.equalizer")}
-                title={t("player.equalizer")}
-                className={`${iconButtonClass} ${
-                  eqOpen || eqActive ? "bg-white/[0.09] text-white" : ""
-                }`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setVolumeOpen(false);
-                  setSpeedOpen(false);
-                  onQueueOpenChange?.(false);
-                  if (!eqOpen)
-                    setEqPopupStyle(popupStyleFor(eqToggleRef.current));
-                  setEqOpen((prev) => !prev);
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <motion.div
-                  animate={{
-                    scale: eqOpen ? 1.08 : 1,
-                  }}
-                  transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                  className="flex items-center justify-center"
-                >
-                  <Tuning2 size={18} weight={eqActive ? "Bold" : "Outline"} />
-                </motion.div>
-              </button>
-              <button
-                ref={speedToggleRef}
-                type="button"
-                aria-label="Speed and Pitch"
-                title={`${t("player.speed_pitch")}: x${(player.playbackRate ?? 1).toFixed(2)}`}
-                className={`${iconButtonClass} ${
-                  speedOpen ||
+            </div>
+
+            <div className="flex w-full items-center gap-[10px]">
+              <span className="min-w-[34px] text-right text-[11px] font-[400] tabular-nums text-text-tertiary select-none">
+                {formatMiniTime(player.positionMs)}
+              </span>
+              <div className="flex-1">
+                <TimelineSlider
+                  positionMs={player.positionMs}
+                  durationMs={durationMs}
+                  onSeek={(pos) => playerEngine.seek(pos)}
+                  size="xs"
+                  fillColor={accentColorSolid || undefined}
+                  fillClassName={
+                    !accentColorSolid
+                      ? isLight
+                        ? "bg-text-primary"
+                        : "bg-white"
+                      : undefined
+                  }
+                  trackBg={
+                    isLight ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.16)"
+                  }
+                  trackActiveBg={
+                    isLight ? "rgba(0, 0, 0, 0.18)" : "rgba(255, 255, 255, 0.28)"
+                  }
+                  className="!h-[14px]"
+                />
+              </div>
+              <span className="min-w-[34px] text-left text-[11px] font-[400] tabular-nums text-text-tertiary select-none">
+                {formatMiniTime(durationMs)}
+              </span>
+            </div>
+          </div>
+
+          {/* Right: EQ, Speed, Queue, Inline Volume Slider, Fullscreen */}
+          <div className="flex items-center justify-end gap-[6px]">
+            <button
+              ref={eqToggleRef}
+              type="button"
+              aria-label={t("player.equalizer")}
+              title={t("player.equalizer")}
+              className={`${iconButtonClass} ${
+                eqOpen || eqActive ? "bg-white/[0.09] text-white" : "text-text-secondary hover:text-text-primary"
+              }`}
+              onClick={() => {
+                setVolumeOpen(false);
+                setSpeedOpen(false);
+                onQueueOpenChange?.(false);
+                if (!eqOpen)
+                  setEqPopupStyle(popupStyleFor(eqToggleRef.current));
+                setEqOpen((prev) => !prev);
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <Tuning2 size={18} weight={eqActive ? "Bold" : "Outline"} />
+            </button>
+            <button
+              ref={speedToggleRef}
+              type="button"
+              aria-label="Speed and Pitch"
+              title={`${t("player.speed_pitch")}: x${(player.playbackRate ?? 1).toFixed(2)}`}
+              className={`${iconButtonClass} ${
+                speedOpen ||
+                Math.abs((player.playbackRate ?? 1) - 1) > 0.001 ||
+                Math.abs(player.pitchSemitones ?? 0) > 0.001
+                  ? activeToggleClass
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              onClick={() => {
+                clearVolumeHoverTimer();
+                setVolumeOpen(false);
+                setEqOpen(false);
+                onQueueOpenChange?.(false);
+                if (!speedOpen)
+                  setSpeedPopupStyle(popupStyleFor(speedToggleRef.current));
+                setSpeedOpen((prev) => !prev);
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <PlaybackSpeed
+                size={18}
+                weight={
                   Math.abs((player.playbackRate ?? 1) - 1) > 0.001 ||
                   Math.abs(player.pitchSemitones ?? 0) > 0.001
-                    ? activeToggleClass
-                    : ""
-                }`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  clearVolumeHoverTimer();
-                  setVolumeOpen(false);
-                  setEqOpen(false);
-                  onQueueOpenChange?.(false);
-                  if (!speedOpen)
-                    setSpeedPopupStyle(popupStyleFor(speedToggleRef.current));
-                  setSpeedOpen((prev) => !prev);
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <motion.div
-                  animate={{
-                    scale: speedOpen ? 1.08 : 1,
-                  }}
-                  transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                  className="flex items-center justify-center"
-                >
-                  <PlaybackSpeed
-                    size={18}
-                    weight={
-                      Math.abs((player.playbackRate ?? 1) - 1) > 0.001 ||
-                      Math.abs(player.pitchSemitones ?? 0) > 0.001
-                        ? "Bold"
-                        : "Outline"
-                    }
-                  />
-                </motion.div>
-              </button>
+                    ? "Bold"
+                    : "Outline"
+                }
+              />
+            </button>
+            <button
+              type="button"
+              aria-label={t("player.queue")}
+              title={t("player.queue")}
+              className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+              onClick={() => {
+                setSpeedOpen(false);
+                setEqOpen(false);
+                setVolumeOpen(false);
+                onQueueToggle?.();
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <Sidebar size={18} weight="Outline" />
+            </button>
+
+            <div
+              className="flex items-center gap-[6px] px-[2px]"
+              onWheel={handleVolumeWheel}
+            >
               <button
                 ref={volumeToggleRef}
                 type="button"
                 aria-label="Volume"
-                className={`${iconButtonClass} ${
-                  volumeOpen ? "bg-bg-toolbox-active text-text-primary" : ""
-                }`}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseEnter={handleVolumeMouseEnter}
-                onMouseLeave={handleVolumeMouseLeave}
-                onWheel={handleVolumeWheel}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  clearVolumeHoverTimer();
-                  if (volumeOpen && volumePinnedRef.current) {
-                    setVolumeOpen(false);
-                    return;
-                  }
-                  volumePinnedRef.current = true;
-                  updateVolumePopupPosition();
-                  setSpeedOpen(false);
-                  setEqOpen(false);
-                  onQueueOpenChange?.(false);
-                  setVolumeOpen(true);
+                className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
+                onClick={() => {
+                  const nextLevel = volumeLevel > 0 ? 0 : 0.7;
+                  playerEngine.setVolume(toVolumeGain(nextLevel));
                 }}
                 style={{ cursor: "pointer" }}
               >
@@ -1022,108 +974,72 @@ function MiniPlayer({
                   <VolumeLoud size={18} weight="Outline" />
                 )}
               </button>
-              <button
-                type="button"
-                aria-label={t("player.open_player")}
-                title={t("player.open_player")}
-                className={iconButtonClass}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setSpeedOpen(false);
-                  setEqOpen(false);
-                  setVolumeOpen(false);
-                  onFullscreenOpen?.();
+              <div
+                role="slider"
+                tabIndex={0}
+                aria-label="Volume"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(volumeLevel * 100)}
+                className="group relative flex h-[18px] w-[84px] cursor-pointer items-center"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  const trackEl = e.currentTarget;
+                  const update = (clientX: number) => {
+                    const rect = trackEl.getBoundingClientRect();
+                    if (!rect.width) return;
+                    const ratio = Math.max(
+                      0,
+                      Math.min(1, (clientX - rect.left) / rect.width),
+                    );
+                    playerEngine.setVolume(toVolumeGain(ratio));
+                  };
+                  update(e.clientX);
+                  const onMove = (ev: PointerEvent) => update(ev.clientX);
+                  const onUp = () => {
+                    window.removeEventListener("pointermove", onMove);
+                    window.removeEventListener("pointerup", onUp);
+                    window.removeEventListener("pointercancel", onUp);
+                  };
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", onUp);
+                  window.addEventListener("pointercancel", onUp);
                 }}
               >
-                <MaximizeSquare3 size={18} weight="Outline" />
-              </button>
-              <span
-                className="mx-[3px] h-[16px] w-px bg-border-toolbox-divider"
-                aria-hidden="true"
-              />
-              <button
-                type="button"
-                aria-label={t("player.queue")}
-                title={t("player.queue")}
-                className={iconButtonClass}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setSpeedOpen(false);
-                  setEqOpen(false);
-                  setVolumeOpen(false);
-                  onQueueToggle?.();
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <Sidebar size={18} weight="Outline" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div
-            className="pointer-events-auto flex items-center gap-[8px] prevent-seek cursor-default"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              aria-label="Previous track"
-              className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                void playerEngine.skipPrevious();
-              }}
-              style={{ cursor: "pointer" }}
-            >
-              <SkipPrevious size={18} weight="Bold" />
-            </button>
-            <button
-              type="button"
-              aria-label={isPlaying ? "Pause" : "Play"}
-              className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-btn-primary-bg text-btn-primary-text transition-all duration-150 ease-out hover:scale-105 active:scale-[0.96] border-none cursor-pointer shadow-sm"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                void playerEngine.togglePlayPause();
-              }}
-              style={{ cursor: "pointer" }}
-            >
-              {/* keep the morph icon mounted through the loading state
-                  (spinner overlays it) — swapping it out on "loading" would
-                  remount MorphIcon when the track starts, which skips the
-                  play -> pause morph animation. */}
-              <span className="relative flex h-[16px] w-[16px] items-center justify-center">
-                <span
-                  className={`absolute inset-0 flex items-center justify-center ${
-                    isLoading ? "opacity-0" : ""
-                  } transition-transform ${
-                    isPlaying ? "" : "translate-x-[0.5px]"
-                  }`}
+                <div
+                  className="h-[4px] w-full overflow-hidden rounded-full"
+                  style={{
+                    backgroundColor: isLight
+                      ? "rgba(0, 0, 0, 0.12)"
+                      : "rgba(255, 255, 255, 0.18)",
+                  }}
                 >
-                  <PlayerMorphIcon
-                    icon={isPlaying ? ICON_PAUSE : ICON_PLAY}
-                    size={16}
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.round(volumeLevel * 100)}%`,
+                      backgroundColor:
+                        accentColorSolid || (isLight ? "#171717" : "#e2f5c8"),
+                    }}
                   />
-                </span>
-                {isLoading && (
-                  <span
-                    className="absolute h-[16px] w-[16px] animate-spin rounded-full border-[2px] border-current border-t-transparent"
-                    aria-label="Loading playback"
-                  />
-                )}
-              </span>
-            </button>
+                </div>
+              </div>
+            </div>
+
             <button
               type="button"
-              aria-label="Next track"
+              aria-label={t("player.open_player")}
+              title={t("player.open_player")}
               className={`${iconButtonClass} text-text-secondary hover:text-text-primary`}
-              onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
-                void playerEngine.skipNext();
+                setSpeedOpen(false);
+                setEqOpen(false);
+                setVolumeOpen(false);
+                onFullscreenOpen?.();
               }}
               style={{ cursor: "pointer" }}
             >
-              <SkipNext size={18} weight="Bold" />
+              <MaximizeSquare3 size={18} weight="Outline" />
             </button>
           </div>
         </div>
