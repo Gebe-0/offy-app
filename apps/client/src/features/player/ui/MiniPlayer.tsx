@@ -648,10 +648,10 @@ function MiniPlayer({
       </AnimatePresence>
 
       <div
-        className={`relative h-[64px] w-full overflow-hidden rounded-[16px] backdrop-blur-[48px] backdrop-saturate-150 ${
-          isLight
-            ? "border border-black/[0.08] bg-white/75"
-            : "border border-white/[0.08] bg-bg-glass dark:bg-black/35"
+        className={`relative h-[78px] w-full overflow-hidden rounded-item ${
+          hasPageBackdrop
+            ? "bg-bg-glass dark:bg-black/20 backdrop-blur-[48px] backdrop-saturate-150"
+            : "bg-bg-primary"
         }`}
       >
         <div className="relative grid h-full grid-cols-[minmax(180px,1fr)_minmax(300px,540px)_minmax(210px,1fr)] items-center gap-[16px] px-[12px]">
@@ -755,7 +755,7 @@ function MiniPlayer({
           </div>
 
           {/* Center: Transport Controls + Timeline with Timestamps */}
-          <div className="flex w-full flex-col items-center justify-center gap-[1px]">
+          <div className="flex w-full flex-col items-center justify-center gap-[5px] py-[4px]">
             <div className="flex items-center justify-center gap-[12px]">
               <button
                 type="button"
