@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, toClientTrack } from "@/shared/api";
-import { playerEngine } from "@/features/player";
 import { useJamStore } from "@/features/jam";
 import { useAuthStore } from "@/features/auth";
 
@@ -51,13 +50,13 @@ export default function DeeplinkHandler() {
                 break;
               case "track": {
                 const track = toClientTrack(await api.getTrack(target.id));
-                playerEngine.playTrack(
-                  track,
-                  [track],
-                  track.artists,
-                  track.coverUrl,
-                );
-                navigate("/player");
+                if (track.album?.id) {
+                  navigate(
+                    `/collection?type=album&id=${encodeURIComponent(track.album.id)}`,
+                  );
+                } else if (track.artistId) {
+                  navigate(`/artist?id=${encodeURIComponent(track.artistId)}`);
+                }
                 break;
               }
               case "jam": {

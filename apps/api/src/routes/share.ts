@@ -487,7 +487,7 @@ export function renderShareHtml(
 
       ${
         safeCoverUrl
-          ? `<img src="${safeCoverUrl}" alt="${safeTitle}" class="media-artwork ${type === "artist" ? "circle" : "square"}" />`
+          ? `<div style="width:168px;height:168px;overflow:hidden;border-radius:${type === "artist" ? "9999px" : "12px"};margin-bottom:20px;border:1px solid rgba(237,237,237,0.08);background:#17171a;"><img src="${safeCoverUrl}" alt="${safeTitle}" style="width:100%;height:100%;object-fit:cover;display:block;${safeCoverUrl.includes("i.ytimg.com") ? "transform:scale(1.36);" : ""}" /></div>`
           : `<div class="disc-visual" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>

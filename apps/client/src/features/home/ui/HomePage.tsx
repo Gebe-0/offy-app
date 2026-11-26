@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import PopularTracksSection from "./PopularTracksSection";
-import DailyMixesSection from "./DailyMixesSection";
-import HomePageSkeleton, { MixesSectionSkeleton } from "./HomePageSkeleton";
+import ListeningNowSection from "./ListeningNowSection";
+import HomePageSkeleton from "./HomePageSkeleton";
 import { useRecentlyPlayed } from "../hooks/useRecentlyPlayed";
-import { useDailyMixes } from "../hooks/useDailyMixes";
+import { useListeningNow } from "../hooks/useListeningNow";
 import { useTranslation } from "@/languages";
 import { usePageBackdrop } from "@/shared/lib";
-import { useHomeBackdrop } from "../hooks/useHomeBackdrop";
-import { Music2Fill, TimeFill, SearchLine } from "@mingcute/react";
+import { FireFill, Music2Fill, TimeFill, SearchLine } from "@mingcute/react";
 
 export default function HomePage() {
   const [attempt, setAttempt] = useState(0);
@@ -17,21 +16,24 @@ export default function HomePage() {
 function HomeFeed({ onRetry: _onRetry }: { onRetry: () => void }) {
   const { t } = useTranslation();
 
+  const { tracks: listeningNow, isLoading: listeningLoading } =
+    useListeningNow();
   const { data: recentlyPlayed, isLoading: recentLoading } =
     useRecentlyPlayed(20);
-  const { data: dailyMixes, isLoading: mixesLoading } = useDailyMixes();
-  const hasMixes = dailyMixes.length > 0;
+  const hasListeningNow = listeningNow.length > 0;
   const hasRecent = Boolean(recentlyPlayed && recentlyPlayed.length > 0);
-  const homeBackdrop = useHomeBackdrop(dailyMixes);
-  const usesMixBackdrop = hasMixes || mixesLoading;
+  const backdropCover =
+    listeningNow[0]?.coverUrl ||
+    recentlyPlayed?.[0]?.item?.coverUrl ||
+    undefined;
   usePageBackdrop(
-    usesMixBackdrop ? homeBackdrop.backdrop : undefined,
-    usesMixBackdrop ? { blur: 56, dim: 0.22 } : undefined,
+    backdropCover,
+    backdropCover ? { blur: 64, dim: 0.28 } : undefined,
   );
 
-  const isDataLoading = mixesLoading || recentLoading;
+  const isDataLoading = listeningLoading || recentLoading;
   const isReady = !isDataLoading;
-  const isEmpty = !hasMixes && !hasRecent;
+  const isEmpty = !hasListeningNow && !hasRecent;
   const [skeletonExited, setSkeletonExited] = useState(() => !isDataLoading);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ function HomeFeed({ onRetry: _onRetry }: { onRetry: () => void }) {
             </span>
             <span className="text-body text-text-secondary max-w-[420px] text-[14px] leading-relaxed">
               {t("home.welcome_desc") ||
-                "Busque e reproduza seus artistas favoritos. Conforme você ouve, seus mixes diários e histórico personalizado aparecerão aqui."}
+                "Busque e reproduza seus artistas favoritos. Conforme você ouve, suas faixas e histórico personalizado aparecerão aqui."}
             </span>
             <button
               type="button"
@@ -82,18 +84,15 @@ function HomeFeed({ onRetry: _onRetry }: { onRetry: () => void }) {
 
         {isReady && !isEmpty && (
           <div className="col-start-1 row-start-1 w-full pb-[16px]">
-            {mixesLoading ? (
-              <MixesSectionSkeleton />
-            ) : (
-              hasMixes && (
-                <div style={{ animation: "page-enter 200ms ease-out" }}>
-                  <DailyMixesSection
-                    mixes={dailyMixes}
-                    headingMarginTop="mt-0"
-                    accentCoverUrl={homeBackdrop.cover}
-                  />
-                </div>
-              )
+            {hasListeningNow && (
+              <div style={{ animation: "page-enter 200ms ease-out" }}>
+                <ListeningNowSection
+                  title={t("home.listeningNow") || "Ouvindo agora"}
+                  icon={<FireFill />}
+                  tracks={listeningNow}
+                  headingMarginTop="mt-0"
+                />
+              </div>
             )}
 
             {hasRecent && (
@@ -101,7 +100,7 @@ function HomeFeed({ onRetry: _onRetry }: { onRetry: () => void }) {
                 title={t("home.jumpBackIn")}
                 icon={<TimeFill />}
                 items={recentlyPlayed}
-                headingMarginTop={hasMixes ? "mt-[22px]" : "mt-0"}
+                headingMarginTop={hasListeningNow ? "mt-[22px]" : "mt-0"}
               />
             )}
           </div>
