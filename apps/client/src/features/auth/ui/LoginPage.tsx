@@ -221,7 +221,7 @@ export default function LoginPage() {
             {forgotMode ? (
               <div className="w-full">
                 <h2 className="text-[18px] font-[600] text-text-primary">
-                  Recuperar senha
+                  {t("login.forgot_title")}
                 </h2>
                 <ForgotPasswordPanel
                   initialEmail={email}
@@ -232,7 +232,7 @@ export default function LoginPage() {
                     setError("");
                     setMode("login");
                     setForgotMode(false);
-                    showToast.success("Senha alterada com sucesso!");
+                    showToast.success(t("login.forgot_success"));
                   }}
                 />
               </div>
@@ -559,7 +559,7 @@ export default function LoginPage() {
                         }}
                         className="mt-[12px] w-full cursor-pointer border-none bg-transparent text-center text-[12.5px] font-[500] text-text-tertiary transition-colors hover:text-text-primary"
                       >
-                        Esqueci minha senha
+                        {t("login.forgot_link")}
                       </button>
                     </motion.div>
                   ) : registerStep === 1 ? (

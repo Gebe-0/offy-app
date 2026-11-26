@@ -648,9 +648,9 @@ function MiniPlayer({
       </AnimatePresence>
 
       <div
-        className={`relative h-[78px] w-full overflow-hidden rounded-item ${
+        className={`relative h-[76px] w-full overflow-hidden rounded-item ${
           hasPageBackdrop
-            ? "bg-bg-glass dark:bg-black/20 backdrop-blur-[48px] backdrop-saturate-150"
+            ? "bg-white/45 dark:bg-black/15 backdrop-blur-[40px] backdrop-saturate-150"
             : "bg-bg-primary"
         }`}
       >
