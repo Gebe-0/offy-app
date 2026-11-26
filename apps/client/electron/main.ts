@@ -2191,6 +2191,7 @@ if (!gotTheLock) {
         return { success: false, error: "Updater is disabled in dev mode" };
       }
       try {
+        await autoUpdater.checkForUpdates();
         await autoUpdater.downloadUpdate();
         return { success: true };
       } catch (err: any) {
