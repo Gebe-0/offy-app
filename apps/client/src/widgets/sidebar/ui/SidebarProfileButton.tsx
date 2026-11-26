@@ -9,7 +9,11 @@ export function SidebarProfileButton() {
 
   const label = user?.displayName || user?.username || "Perfil";
   const initial = (label.trim()[0] || "U").toUpperCase();
-  const avatarSrc = user?.avatarUrl ? mediaUrl(user.avatarUrl) : "";
+  const avatarSrc = user?.avatarUrl
+    ? user.avatarUrl.startsWith("data:") || user.avatarUrl.startsWith("http")
+      ? user.avatarUrl
+      : mediaUrl(user.avatarUrl)
+    : "";
 
   return (
     <Tooltip content={label} side="right" sideOffset={12}>

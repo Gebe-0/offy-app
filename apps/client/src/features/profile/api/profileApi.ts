@@ -126,8 +126,8 @@ export const profileApi = {
   updateProfile(patch: {
     displayName?: string;
     username?: string;
-    avatarUrl?: string;
-    discordHandle?: string;
+    avatarUrl?: string | null;
+    discordHandle?: string | null;
   }): Promise<unknown> {
     return authedJson("/v1/users/me", {
       method: "PATCH",

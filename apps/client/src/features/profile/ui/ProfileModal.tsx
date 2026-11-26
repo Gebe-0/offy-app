@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeftLine,
   CheckLine,
-  CloseLine,
   Edit2Line,
   PinFill,
   SearchLine,
   ShareForwardFill,
+  Upload2Line,
   UserAddLine,
   UserFollowLine,
 } from "@mingcute/react";
 import { useModalStore } from "@/features/library";
 import { useAuthStore } from "@/features/auth";
+import { useDiscordStatus } from "@/features/discord";
 import { playerEngine } from "@/features/player";
 import { CoverImage } from "@/features/covers";
 import { mediaUrl, toClientTrack } from "@/shared/api";
@@ -25,8 +26,60 @@ import {
   type ProfileSummaryResponse,
 } from "../api/profileApi";
 
+function DiscordGlyph({
+  size = 15,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+    </svg>
+  );
+}
+
+function resolveAvatarSrc(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return mediaUrl(url);
+}
+
+async function compressAvatarFile(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+
+  const minSide = Math.min(bitmap.width, bitmap.height);
+  const sx = (bitmap.width - minSide) / 2;
+  const sy = (bitmap.height - minSide) / 2;
+  ctx.drawImage(bitmap, sx, sy, minSide, minSide, 0, 0, size, size);
+  bitmap.close();
+
+  const webp = canvas.toDataURL("image/webp", 0.82);
+  if (webp.startsWith("data:image/webp")) return webp;
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 function formatRelativeTime(iso: string): string {
-  const diffSec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  const diffSec = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
+  );
   if (diffSec < 60) return "agora";
   const mins = Math.floor(diffSec / 60);
   if (mins < 60) return `${mins} min`;
@@ -53,7 +106,7 @@ function formatMonthHours(ms: number): string {
 
 function AvatarBox({
   user,
-  size = 56,
+  size = 60,
   rounded = "rounded-[14px]",
 }: {
   user: { displayName?: string; username?: string; avatarUrl?: string | null };
@@ -62,7 +115,7 @@ function AvatarBox({
 }) {
   const label = user.displayName || user.username || "U";
   const initial = (label.trim()[0] || "U").toUpperCase();
-  const src = user.avatarUrl ? mediaUrl(user.avatarUrl) : "";
+  const src = resolveAvatarSrc(user.avatarUrl);
   return (
     <div
       style={{ width: size, height: size }}
@@ -79,12 +132,23 @@ function AvatarBox({
   );
 }
 
+// Coordenadas orgânicas espalhadas para os círculos de fundo do Top Artists
+const SCATTERED_ARTIST_POSITIONS = [
+  { top: "-12px", right: "118px", size: 78, opacity: 0.72 },
+  { top: "-8px", right: "38px", size: 74, opacity: 0.62 },
+  { top: "-6px", right: "-26px", size: 72, opacity: 0.45 },
+  { top: "68px", right: "68px", size: 76, opacity: 0.55 },
+  { top: "62px", right: "-10px", size: 74, opacity: 0.42 },
+];
+
 export default function ProfileModal() {
   const open = useModalStore((s) => s.profileOpen);
   const targetId = useModalStore((s) => s.profileTargetId);
   const openProfile = useModalStore((s) => s.openProfile);
   const closeProfile = useModalStore((s) => s.closeProfile);
+  const { status: discordStatus } = useDiscordStatus();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [view, setView] = useState<"profile" | "friends" | "edit">("profile");
   const [friendsTab, setFriendsTab] = useState<"friends" | "requests">("friends");
@@ -100,9 +164,15 @@ export default function ProfileModal() {
   // Edit profile form
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editUsername, setEditUsername] = useState("");
-  const [editAvatarUrl, setEditAvatarUrl] = useState("");
-  const [editDiscord, setEditDiscord] = useState("");
+  const [editAvatarData, setEditAvatarData] = useState<string | null>(null);
+  const [editDiscordManual, setEditDiscordManual] = useState("");
+  const [showRpcDiscord, setShowRpcDiscord] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const rpcDiscordUsername =
+    discordStatus.connected && discordStatus.username
+      ? discordStatus.username.replace(/^@+/, "")
+      : null;
 
   const loadSummary = useCallback(async (id: string) => {
     setLoading(true);
@@ -168,21 +238,45 @@ export default function ProfileModal() {
     if (!summary) return;
     setEditDisplayName(summary.user.displayName || "");
     setEditUsername(summary.user.username || "");
-    setEditAvatarUrl(summary.user.avatarUrl || "");
-    setEditDiscord(summary.user.discordHandle || "");
+    setEditAvatarData(summary.user.avatarUrl || null);
+    setEditDiscordManual(summary.user.discordHandle || "");
+    setShowRpcDiscord(Boolean(summary.user.discordHandle ?? true));
     setView("edit");
+  };
+
+  const handlePickAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast.error("Selecione um arquivo de imagem válido.");
+      return;
+    }
+    try {
+      const compressed = await compressAvatarFile(file);
+      setEditAvatarData(compressed);
+    } catch {
+      showToast.error("Não foi possível processar a imagem.");
+    }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingEdit(true);
     try {
+      const nextDiscord = rpcDiscordUsername
+        ? showRpcDiscord
+          ? rpcDiscordUsername
+          : null
+        : editDiscordManual.trim().replace(/^@+/, "") || null;
+
       await profileApi.updateProfile({
         displayName: editDisplayName.trim(),
         username: editUsername.trim().toLowerCase(),
-        avatarUrl: editAvatarUrl.trim() || undefined,
-        discordHandle: editDiscord.trim().replace(/^@+/, "") || undefined,
+        avatarUrl: editAvatarData,
+        discordHandle: nextDiscord,
       });
+
       const currentUser = useAuthStore.getState().user;
       if (currentUser) {
         useAuthStore.setState({
@@ -190,10 +284,11 @@ export default function ProfileModal() {
             ...currentUser,
             displayName: editDisplayName.trim() || currentUser.displayName,
             username: editUsername.trim().toLowerCase() || currentUser.username,
-            avatarUrl: editAvatarUrl.trim() || currentUser.avatarUrl,
+            avatarUrl: editAvatarData ?? undefined,
           },
         });
       }
+
       showToast.success("Perfil atualizado!");
       setView("profile");
       await loadSummary("me");
@@ -255,6 +350,19 @@ export default function ProfileModal() {
     }
   };
 
+  const openDiscordDownload = () => {
+    window.open("https://discord.com/download", "_blank", "noopener,noreferrer");
+  };
+
+  // Distribuição de pílulas do Top Artists em 3 linhas (1 | 2,3 | 4,5) igual à print
+  const topArtistRows = summary
+    ? [
+        summary.topArtistsMonth.slice(0, 1),
+        summary.topArtistsMonth.slice(1, 3),
+        summary.topArtistsMonth.slice(3, 5),
+      ].filter((row) => row.length > 0)
+    : [];
+
   return (
     <AnimatePresence>
       {open && (
@@ -264,7 +372,7 @@ export default function ProfileModal() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.16 }}
           onClick={closeProfile}
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 p-[20px] backdrop-blur-md"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65 p-[18px] backdrop-blur-md"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -272,9 +380,9 @@ export default function ProfileModal() {
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="relative flex max-h-[88vh] w-full max-w-[820px] flex-col overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#131417]/95 p-[22px] text-text-primary shadow-2xl backdrop-blur-2xl"
+            className="relative flex max-h-[88vh] w-full max-w-[800px] flex-col overflow-hidden rounded-[22px] border border-white/[0.07] bg-[#141517]/95 p-[20px] text-text-primary shadow-2xl backdrop-blur-2xl"
           >
-            {/* Header */}
+            {/* Header (sem botão X — fecha clicando fora ou ESC) */}
             <div className="flex items-start justify-between gap-[16px]">
               <div className="flex min-w-0 items-center gap-[14px]">
                 {view !== "profile" && (
@@ -288,10 +396,10 @@ export default function ProfileModal() {
                 )}
                 {summary ? (
                   <>
-                    <AvatarBox user={summary.user} size={56} rounded="rounded-[14px]" />
+                    <AvatarBox user={summary.user} size={60} rounded="rounded-[14px]" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-[8px]">
-                        <h2 className="truncate text-[23px] font-[700] leading-tight tracking-tight text-white">
+                        <h2 className="truncate text-[27px] font-[700] leading-[1.1] tracking-[-0.02em] text-white">
                           {summary.user.displayName}
                         </h2>
                         {/* Slot reservado de conquistas — vazio por enquanto */}
@@ -312,26 +420,26 @@ export default function ProfileModal() {
                           </div>
                         )}
                       </div>
-                      <p className="mt-[2px] text-[13px] text-white/45">
+                      <p className="mt-[3px] text-[13.5px] font-[400] text-white/45">
                         @{summary.user.username}
                       </p>
                     </div>
                   </>
                 ) : (
-                  <div className="h-[56px] w-[220px] animate-pulse rounded-[14px] bg-white/[0.06]" />
+                  <div className="h-[60px] w-[220px] animate-pulse rounded-[14px] bg-white/[0.06]" />
                 )}
               </div>
 
               {/* Right header controls */}
               {summary && (
-                <div className="flex shrink-0 flex-col items-end gap-[8px]">
+                <div className="flex shrink-0 flex-col items-end gap-[9px]">
                   <div className="flex items-center gap-[10px]">
                     <button
                       type="button"
                       onClick={() =>
                         summary.isSelf ? handleOpenFriends("friends") : undefined
                       }
-                      className="flex items-center gap-[8px] border-0 bg-transparent p-0 text-[13px] font-[500] text-white/75 hover:text-white cursor-pointer"
+                      className="flex items-center gap-[8px] border-0 bg-transparent p-0 text-[13.5px] font-[500] text-white/75 hover:text-white cursor-pointer"
                     >
                       <span>
                         {summary.friendsCount}{" "}
@@ -342,7 +450,7 @@ export default function ProfileModal() {
                           {summary.friendAvatars.slice(0, 4).map((f) => (
                             <div
                               key={f.id}
-                              className="ring-2 ring-[#131417] rounded-full overflow-hidden"
+                              className="overflow-hidden rounded-full ring-2 ring-[#141517]"
                             >
                               <AvatarBox user={f} size={22} rounded="rounded-full" />
                             </div>
@@ -364,21 +472,12 @@ export default function ProfileModal() {
                         </span>
                       </button>
                     )}
-
-                    <button
-                      type="button"
-                      onClick={closeProfile}
-                      aria-label="Close"
-                      className="flex h-[28px] w-[28px] items-center justify-center rounded-full border-0 bg-white/[0.06] text-white/60 hover:bg-white/[0.12] hover:text-white cursor-pointer"
-                    >
-                      <CloseLine size={16} />
-                    </button>
                   </div>
 
                   <div className="flex items-center gap-[8px]">
                     {summary.user.discordHandle && (
-                      <span className="inline-flex h-[32px] items-center gap-[6px] rounded-full bg-white/[0.07] px-[12px] text-[12.5px] font-[500] text-white/85">
-                        <span className="text-[#7289da] font-bold">DC</span>
+                      <span className="inline-flex h-[32px] items-center gap-[7px] rounded-full bg-white/[0.08] px-[12px] text-[12.5px] font-[500] text-white/90">
+                        <DiscordGlyph size={15} className="text-white" />
                         <span>@{summary.user.discordHandle}</span>
                       </span>
                     )}
@@ -389,7 +488,7 @@ export default function ProfileModal() {
                           type="button"
                           onClick={handleShareProfile}
                           title="Copiar usuário"
-                          className="flex h-[32px] w-[32px] items-center justify-center rounded-full border-0 bg-white/[0.08] text-white/80 hover:bg-white/[0.14] hover:text-white cursor-pointer"
+                          className="flex h-[32px] w-[32px] items-center justify-center rounded-full border-0 bg-white/[0.08] text-white/85 hover:bg-white/[0.15] hover:text-white cursor-pointer"
                         >
                           <ShareForwardFill size={15} />
                         </button>
@@ -397,7 +496,7 @@ export default function ProfileModal() {
                           type="button"
                           onClick={handleOpenEdit}
                           title="Editar perfil"
-                          className="flex h-[32px] w-[32px] items-center justify-center rounded-full border-0 bg-white/[0.08] text-white/80 hover:bg-white/[0.14] hover:text-white cursor-pointer"
+                          className="flex h-[32px] w-[32px] items-center justify-center rounded-full border-0 bg-white/[0.08] text-white/85 hover:bg-white/[0.15] hover:text-white cursor-pointer"
                         >
                           <Edit2Line size={15} />
                         </button>
@@ -457,19 +556,25 @@ export default function ProfileModal() {
             </div>
 
             {/* Body */}
-            <div className="mt-[18px] flex-1 overflow-y-auto pr-[2px] [scrollbar-width:thin]">
+            <div className="mt-[16px] flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {loading && !summary ? (
-                <div className="grid grid-cols-2 gap-[14px]">
-                  <div className="h-[320px] animate-pulse rounded-[16px] bg-white/[0.04]" />
-                  <div className="h-[320px] animate-pulse rounded-[16px] bg-white/[0.04]" />
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <div className="h-[340px] animate-pulse rounded-[16px] bg-white/[0.04]" />
+                  <div className="h-[340px] animate-pulse rounded-[16px] bg-white/[0.04]" />
                 </div>
               ) : view === "profile" && summary ? (
-                <div className="grid grid-cols-1 gap-[14px] md:grid-cols-[1fr_1.06fr]">
+                <div className="grid grid-cols-1 gap-[12px] md:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)]">
                   {/* LEFT COLUMN: Recent + Top Artists */}
-                  <div className="flex flex-col gap-[14px]">
-                    {/* Recent Card */}
-                    <div className="rounded-[16px] border border-white/[0.05] bg-white/[0.03] p-[16px]">
-                      <h3 className="mb-[12px] text-[16px] font-[600] text-white">
+                  <div className="flex min-w-0 flex-col gap-[12px]">
+                    {/* Recent Card com fade suave no canto inferior direito */}
+                    <div
+                      className="min-w-0 rounded-[16px] border border-white/[0.05] p-[16px]"
+                      style={{
+                        background:
+                          "radial-gradient(circle at 92% 95%, rgba(255,255,255,0.085), rgba(255,255,255,0.03) 62%)",
+                      }}
+                    >
+                      <h3 className="mb-[12px] text-[17px] font-[600] tracking-[-0.01em] text-white">
                         Recent
                       </h3>
                       {summary.recent.length === 0 ? (
@@ -477,7 +582,7 @@ export default function ProfileModal() {
                           Nenhuma música recente ainda.
                         </p>
                       ) : (
-                        <div className="flex flex-col gap-[10px]">
+                        <div className="flex flex-col gap-[7px]">
                           {summary.recent.map((item) => {
                             const track = toClientTrack(item.track);
                             return (
@@ -492,7 +597,7 @@ export default function ProfileModal() {
                                     track.coverUrl,
                                   );
                                 }}
-                                className="group flex w-full items-center gap-[11px] rounded-[10px] border-0 bg-transparent p-[4px] text-left transition-colors hover:bg-white/[0.05] cursor-pointer"
+                                className="group flex w-full min-w-0 items-center gap-[10px] rounded-[9px] border-0 bg-transparent px-[4px] py-[3px] text-left transition-colors hover:bg-white/[0.05] cursor-pointer"
                               >
                                 <div className="h-[38px] w-[38px] shrink-0 overflow-hidden rounded-[8px] bg-white/[0.06]">
                                   <CoverImage
@@ -504,14 +609,14 @@ export default function ProfileModal() {
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-[13.5px] font-[500] text-white">
+                                  <p className="truncate text-[13.5px] font-[600] leading-[17px] text-white">
                                     {track.title}
                                   </p>
-                                  <p className="truncate text-[12px] text-white/45">
+                                  <p className="mt-[1px] truncate text-[12px] leading-[15px] text-white/45">
                                     {track.artists}
                                   </p>
                                 </div>
-                                <span className="shrink-0 text-[12px] text-white/35">
+                                <span className="shrink-0 pl-[6px] text-[12px] text-white/35">
                                   {formatRelativeTime(item.playedAt)}
                                 </span>
                               </button>
@@ -521,79 +626,115 @@ export default function ProfileModal() {
                       )}
                     </div>
 
-                    {/* Top Artists Month Card */}
-                    <div className="relative overflow-hidden rounded-[16px] border border-white/[0.05] bg-white/[0.03] p-[16px]">
-                      <div className="relative z-10 mb-[12px] flex items-baseline gap-[8px]">
-                        <h3 className="text-[16px] font-[600] text-white">
-                          Top artists
-                        </h3>
-                        <span className="text-[13px] text-white/40">Month</span>
-                      </div>
-
-                      {/* Decorative faded circles on right */}
+                    {/* Top Artists Month Card — círculos espalhados + 3 linhas */}
+                    <div
+                      className="relative min-w-0 overflow-hidden rounded-[16px] border border-white/[0.05] p-[16px]"
+                      style={{
+                        background:
+                          "linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))",
+                      }}
+                    >
+                      {/* Círculos espalhados orgânicos no fundo com fade lateral */}
                       {summary.topArtistsMonth.length > 0 && (
-                        <div className="pointer-events-none absolute -right-[10px] top-[12px] flex flex-wrap justify-end gap-[6px] w-[170px] opacity-30">
-                          {summary.topArtistsMonth.slice(0, 4).map((a) => (
-                            <div
-                              key={`bg-${a.name}`}
-                              className="h-[68px] w-[68px] overflow-hidden rounded-full bg-white/[0.08]"
-                            >
-                              {a.coverUrl && (
-                                <img
-                                  src={a.coverUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {summary.topArtistsMonth.length === 0 ? (
-                        <p className="py-[12px] text-[13px] text-white/40">
-                          Ouça mais faixas este mês para ver seus artistas.
-                        </p>
-                      ) : (
-                        <div className="relative z-10 flex flex-wrap gap-[8px]">
-                          {summary.topArtistsMonth.map((artist, idx) => (
-                            <button
-                              key={artist.name}
-                              type="button"
-                              onClick={() => {
-                                closeProfile();
-                                navigate(
-                                  `/artist?id=${encodeURIComponent(artist.id || artist.name)}`,
-                                );
-                              }}
-                              className="inline-flex items-center gap-[8px] rounded-[11px] border border-white/[0.06] bg-[#18191d]/85 px-[10px] py-[6px] text-left hover:bg-white/[0.12] cursor-pointer backdrop-blur-md"
-                            >
-                              <span className="text-[12px] font-[600] text-white/45">
-                                {idx + 1}
-                              </span>
-                              <div className="h-[24px] w-[24px] overflow-hidden rounded-full bg-white/[0.08]">
-                                {artist.coverUrl && (
+                        <div
+                          className="pointer-events-none absolute inset-0 overflow-hidden"
+                          style={{
+                            WebkitMaskImage:
+                              "linear-gradient(to left, rgba(0,0,0,0.92) 24%, rgba(0,0,0,0.38) 62%, transparent 90%)",
+                            maskImage:
+                              "linear-gradient(to left, rgba(0,0,0,0.92) 24%, rgba(0,0,0,0.38) 62%, transparent 90%)",
+                          }}
+                        >
+                          {summary.topArtistsMonth.slice(0, 5).map((a, i) => {
+                            const pos = SCATTERED_ARTIST_POSITIONS[i]!;
+                            return (
+                              <div
+                                key={`scatter-${a.name}`}
+                                style={{
+                                  top: pos.top,
+                                  right: pos.right,
+                                  width: pos.size,
+                                  height: pos.size,
+                                  opacity: pos.opacity,
+                                }}
+                                className="absolute overflow-hidden rounded-full bg-white/[0.08]"
+                              >
+                                {a.coverUrl && (
                                   <img
-                                    src={artist.coverUrl}
-                                    alt={artist.name}
+                                    src={a.coverUrl}
+                                    alt=""
                                     className="h-full w-full object-cover"
                                   />
                                 )}
                               </div>
-                              <span className="max-w-[130px] truncate text-[13px] font-[600] text-white">
-                                {artist.name}
-                              </span>
-                            </button>
-                          ))}
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div className="relative z-10 mb-[12px] flex items-baseline gap-[8px]">
+                        <h3 className="text-[17px] font-[600] tracking-[-0.01em] text-white">
+                          Top artists
+                        </h3>
+                        <span className="text-[13.5px] font-[400] text-white/40">
+                          Month
+                        </span>
+                      </div>
+
+                      {summary.topArtistsMonth.length === 0 ? (
+                        <p className="relative z-10 py-[12px] text-[13px] text-white/40">
+                          Ouça mais faixas este mês para ver seus artistas.
+                        </p>
+                      ) : (
+                        <div className="relative z-10 flex flex-col gap-[8px]">
+                          {topArtistRows.map((row, rowIdx) => {
+                            const startRank = rowIdx === 0 ? 1 : rowIdx === 1 ? 2 : 4;
+                            return (
+                              <div
+                                key={rowIdx}
+                                className="flex flex-wrap items-center gap-[8px]"
+                              >
+                                {row.map((artist, idx) => (
+                                  <button
+                                    key={artist.name}
+                                    type="button"
+                                    onClick={() => {
+                                      closeProfile();
+                                      navigate(
+                                        `/artist?id=${encodeURIComponent(artist.id || artist.name)}`,
+                                      );
+                                    }}
+                                    className="inline-flex max-w-full items-center gap-[8px] rounded-[11px] border border-white/[0.06] bg-[#1a1b1f]/80 px-[10px] py-[6px] text-left hover:bg-white/[0.14] cursor-pointer backdrop-blur-md"
+                                  >
+                                    <span className="text-[12.5px] font-[500] text-white/50">
+                                      {startRank + idx}
+                                    </span>
+                                    <div className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
+                                      {artist.coverUrl && (
+                                        <img
+                                          src={artist.coverUrl}
+                                          alt={artist.name}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      )}
+                                    </div>
+                                    <span className="max-w-[120px] truncate text-[13px] font-[600] text-white">
+                                      {artist.name}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* RIGHT COLUMN: 2x2 Pinned Cards + Top Tracks Month */}
-                  <div className="flex flex-col gap-[14px]">
+                  <div className="flex min-w-0 flex-col gap-[12px]">
                     {/* 2x2 Pinned Playlists / Likes */}
-                    <div className="grid grid-cols-2 gap-[10px]">
+                    <div className="grid min-w-0 grid-cols-2 gap-[10px]">
                       {summary.pinnedCards.map((card) => {
                         const hasCollage = card.coverUrls.length >= 4;
                         const firstCover = card.coverUrls[0] || "";
@@ -611,7 +752,7 @@ export default function ProfileModal() {
                                 );
                               }
                             }}
-                            className="group relative aspect-square w-full overflow-hidden rounded-[15px] border border-white/[0.06] bg-white/[0.04] p-0 text-left cursor-pointer"
+                            className="group relative aspect-square w-full min-w-0 overflow-hidden rounded-[15px] border border-white/[0.06] bg-white/[0.04] p-0 text-left cursor-pointer"
                           >
                             {hasCollage ? (
                               <div className="grid h-full w-full grid-cols-2 grid-rows-2 transition-transform duration-300 group-hover:scale-105">
@@ -638,17 +779,17 @@ export default function ProfileModal() {
                               <div className="h-full w-full bg-gradient-to-br from-white/[0.08] to-white/[0.02]" />
                             )}
 
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
 
-                            <span className="absolute left-[10px] top-[10px] flex h-[22px] w-[22px] items-center justify-center rounded-full bg-black/45 text-white/85 backdrop-blur-sm">
+                            <span className="absolute left-[10px] top-[10px] flex h-[22px] w-[22px] items-center justify-center rounded-full bg-black/45 text-white/90 backdrop-blur-sm">
                               <PinFill size={12} />
                             </span>
 
-                            <div className="absolute inset-x-[12px] bottom-[10px]">
-                              <p className="truncate text-[14px] font-[600] text-white">
+                            <div className="absolute inset-x-[12px] bottom-[10px] min-w-0">
+                              <p className="truncate text-[14.5px] font-[600] leading-tight text-white">
                                 {card.title}
                               </p>
-                              <p className="mt-[2px] text-[11.5px] text-white/65">
+                              <p className="mt-[2px] truncate text-[11.5px] text-white/65">
                                 {card.trackCount} tracks ·{" "}
                                 {formatTotalDuration(card.totalDurationMs)}
                               </p>
@@ -658,16 +799,22 @@ export default function ProfileModal() {
                       })}
                     </div>
 
-                    {/* Top Tracks Month Card */}
-                    <div className="rounded-[16px] border border-white/[0.05] bg-white/[0.03] p-[16px]">
-                      <div className="mb-[12px] flex items-center justify-between">
+                    {/* Top Tracks Month Card com fade suave na base */}
+                    <div
+                      className="relative min-w-0 overflow-hidden rounded-[16px] border border-white/[0.05] p-[16px]"
+                      style={{
+                        background:
+                          "linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015))",
+                      }}
+                    >
+                      <div className="mb-[12px] flex items-center justify-between gap-[8px]">
                         <div className="flex items-baseline gap-[8px]">
-                          <h3 className="text-[16px] font-[600] text-white">
+                          <h3 className="text-[17px] font-[600] tracking-[-0.01em] text-white">
                             Top tracks
                           </h3>
-                          <span className="text-[13px] text-white/40">Month</span>
+                          <span className="text-[13.5px] text-white/40">Month</span>
                         </div>
-                        <span className="text-[14px] font-[600] tabular-nums text-white/85">
+                        <span className="shrink-0 text-[15px] font-[600] tabular-nums text-white/90">
                           {formatMonthHours(summary.monthlyListeningMs)}
                         </span>
                       </div>
@@ -677,7 +824,15 @@ export default function ProfileModal() {
                           Sem faixas suficientes neste mês.
                         </p>
                       ) : (
-                        <div className="flex flex-col gap-[8px]">
+                        <div
+                          className="flex max-h-[168px] flex-col gap-[7px] overflow-y-auto pr-[2px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                          style={{
+                            WebkitMaskImage:
+                              "linear-gradient(to bottom, #000 72%, transparent 100%)",
+                            maskImage:
+                              "linear-gradient(to bottom, #000 72%, transparent 100%)",
+                          }}
+                        >
                           {summary.topTracksMonth.map((entry, idx) => {
                             const track = toClientTrack(entry.track);
                             return (
@@ -694,9 +849,9 @@ export default function ProfileModal() {
                                     track.coverUrl,
                                   );
                                 }}
-                                className="flex w-full items-center gap-[10px] rounded-[10px] border-0 bg-transparent p-[4px] text-left hover:bg-white/[0.05] cursor-pointer"
+                                className="flex w-full min-w-0 items-center gap-[10px] rounded-[9px] border-0 bg-transparent px-[4px] py-[3px] text-left hover:bg-white/[0.05] cursor-pointer"
                               >
-                                <span className="w-[16px] text-center text-[12px] font-[600] text-white/40">
+                                <span className="w-[16px] shrink-0 text-center text-[12px] font-[600] text-white/45">
                                   {idx + 1}
                                 </span>
                                 <div className="h-[36px] w-[36px] shrink-0 overflow-hidden rounded-[8px] bg-white/[0.06]">
@@ -709,10 +864,10 @@ export default function ProfileModal() {
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-[13.5px] font-[500] text-white">
+                                  <p className="truncate text-[13.5px] font-[600] leading-[17px] text-white">
                                     {track.title}
                                   </p>
-                                  <p className="truncate text-[12px] text-white/45">
+                                  <p className="mt-[1px] truncate text-[12px] leading-[15px] text-white/45">
                                     {track.artists}
                                   </p>
                                 </div>
@@ -726,7 +881,6 @@ export default function ProfileModal() {
                 </div>
               ) : view === "friends" ? (
                 <div className="flex flex-col gap-[16px]">
-                  {/* Search users to add */}
                   <div className="relative">
                     <SearchLine
                       size={16}
@@ -787,7 +941,6 @@ export default function ProfileModal() {
                     </div>
                   )}
 
-                  {/* Tabs: Friends / Requests */}
                   <div className="flex gap-[8px]">
                     <button
                       type="button"
@@ -868,7 +1021,11 @@ export default function ProfileModal() {
                               onClick={() => openProfile(req.user.id)}
                               className="flex items-center gap-[10px] border-0 bg-transparent p-0 text-left cursor-pointer"
                             >
-                              <AvatarBox user={req.user} size={38} rounded="rounded-[10px]" />
+                              <AvatarBox
+                                user={req.user}
+                                size={38}
+                                rounded="rounded-[10px]"
+                              />
                               <div>
                                 <p className="text-[14px] font-[600] text-white">
                                   {req.user.displayName}
@@ -901,11 +1058,55 @@ export default function ProfileModal() {
                   )}
                 </div>
               ) : (
-                /* Edit Profile View */
+                /* Edit Profile View — Upload do PC + Discord RPC automático */
                 <form
                   onSubmit={handleSaveEdit}
-                  className="mx-auto flex max-w-[460px] flex-col gap-[14px] py-[8px]"
+                  className="mx-auto flex max-w-[460px] flex-col gap-[16px] py-[8px]"
                 >
+                  {/* Foto de perfil do PC */}
+                  <div className="flex items-center gap-[16px]">
+                    <AvatarBox
+                      user={{
+                        displayName: editDisplayName,
+                        username: editUsername,
+                        avatarUrl: editAvatarData,
+                      }}
+                      size={64}
+                      rounded="rounded-[16px]"
+                    />
+                    <div className="flex flex-col gap-[8px]">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePickAvatarFile}
+                        className="hidden"
+                      />
+                      <div className="flex items-center gap-[8px]">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="inline-flex h-[34px] items-center gap-[6px] rounded-[10px] border-0 bg-white/[0.1] px-[14px] text-[13px] font-[500] text-white hover:bg-white/[0.16] cursor-pointer"
+                        >
+                          <Upload2Line size={15} />
+                          <span>Escolher foto do PC</span>
+                        </button>
+                        {editAvatarData && (
+                          <button
+                            type="button"
+                            onClick={() => setEditAvatarData(null)}
+                            className="h-[34px] rounded-[10px] border-0 bg-transparent px-[10px] text-[12.5px] text-white/50 hover:text-red-300 cursor-pointer"
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <span className="text-[11.5px] text-white/40">
+                        PNG, JPG ou WebP — ajustada automaticamente para 256×256.
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col gap-[6px]">
                     <label className="text-[12.5px] font-[500] text-white/65">
                       Nome de exibição
@@ -917,6 +1118,7 @@ export default function ProfileModal() {
                       className="h-[40px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-[12px] text-[13.5px] text-white outline-none focus:border-white/25"
                     />
                   </div>
+
                   <div className="flex flex-col gap-[6px]">
                     <label className="text-[12.5px] font-[500] text-white/65">
                       Username (@)
@@ -928,30 +1130,61 @@ export default function ProfileModal() {
                       className="h-[40px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-[12px] text-[13.5px] text-white outline-none focus:border-white/25"
                     />
                   </div>
+
+                  {/* Discord: automático via RPC ou manual com ícone branco brilhante */}
                   <div className="flex flex-col gap-[6px]">
-                    <label className="text-[12.5px] font-[500] text-white/65">
-                      Discord (@handle)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="ex: v0rt1s"
-                      value={editDiscord}
-                      onChange={(e) => setEditDiscord(e.target.value)}
-                      className="h-[40px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-[12px] text-[13.5px] text-white outline-none focus:border-white/25"
-                    />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-[8px]">
+                        <label className="text-[12.5px] font-[500] text-white/65">
+                          Discord (@handle)
+                        </label>
+                        {!rpcDiscordUsername && (
+                          <button
+                            type="button"
+                            onClick={openDiscordDownload}
+                            title="Baixar Discord"
+                            className="inline-flex items-center justify-center border-0 bg-transparent p-0 text-white cursor-pointer transition-transform hover:scale-110"
+                            style={{
+                              filter: "drop-shadow(0 0 6px rgba(255,255,255,0.85))",
+                            }}
+                          >
+                            <DiscordGlyph size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      {rpcDiscordUsername && (
+                        <label className="flex items-center gap-[6px] text-[12px] text-white/65 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showRpcDiscord}
+                            onChange={(e) => setShowRpcDiscord(e.target.checked)}
+                            className="accent-white"
+                          />
+                          <span>Mostrar no perfil</span>
+                        </label>
+                      )}
+                    </div>
+
+                    {rpcDiscordUsername ? (
+                      <div className="flex h-[40px] items-center gap-[8px] rounded-[10px] border border-white/[0.08] bg-white/[0.06] px-[12px] text-[13.5px] text-white/85">
+                        <DiscordGlyph size={15} className="text-white" />
+                        <span>@{rpcDiscordUsername}</span>
+                        <span className="ml-auto rounded-full bg-[#10b981]/20 px-[8px] py-[2px] text-[11px] font-[600] text-[#34d399]">
+                          RPC conectado
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="ex: arlw_"
+                        value={editDiscordManual}
+                        onChange={(e) => setEditDiscordManual(e.target.value)}
+                        className="h-[40px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-[12px] text-[13.5px] text-white placeholder:text-white/35 outline-none focus:border-white/25"
+                      />
+                    )}
                   </div>
-                  <div className="flex flex-col gap-[6px]">
-                    <label className="text-[12.5px] font-[500] text-white/65">
-                      URL da foto de perfil
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={editAvatarUrl}
-                      onChange={(e) => setEditAvatarUrl(e.target.value)}
-                      className="h-[40px] rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-[12px] text-[13.5px] text-white outline-none focus:border-white/25"
-                    />
-                  </div>
+
                   <div className="mt-[6px] flex justify-end gap-[10px]">
                     <button
                       type="button"
