@@ -6,7 +6,7 @@
 
 **O reprodutor de música desktop moderno, rápido, sem anúncios e com sincronização coletiva.**
 
-[![Versao](https://img.shields.io/github/v/release/Gebe-0/offy-app?label=Versao&color=E11D48&style=for-the-badge)](https://github.com/Gebe-0/offy-app/releases/latest)
+[![Versão](./.github/assets/version-badge.svg)](https://github.com/Gebe-0/offy-app/releases/latest)
 [![Plataforma](https://img.shields.io/badge/Plataforma-Windows%20%7C%20Linux%20%7C%20macOS-0284C7?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
 [![Discord Suporte](https://img.shields.io/badge/Suporte%20Discord-@arlw__-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com)
 [![Editor](https://img.shields.io/badge/Editor-GEBE--OFFY-10B981?style=for-the-badge)](https://github.com/Gebe-0/offy-app)
