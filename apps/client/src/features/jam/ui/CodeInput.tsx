@@ -5,6 +5,7 @@ interface CodeInputProps {
   onChange: (value: string) => void;
   onComplete?: (value: string) => void;
   disabled?: boolean;
+  numericOnly?: boolean;
 }
 
 export function CodeInput({
@@ -12,6 +13,7 @@ export function CodeInput({
   onChange,
   onComplete,
   disabled,
+  numericOnly = false,
 }: CodeInputProps) {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -30,7 +32,9 @@ export function CodeInput({
     index: number,
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const rawVal = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const rawVal = numericOnly
+      ? e.target.value.replace(/[^0-9]/g, "")
+      : e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!rawVal) {
       const nextArr = Array.from({ length: 6 }, (_, i) => value[i] || "");
       nextArr[index] = "";

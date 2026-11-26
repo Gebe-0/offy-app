@@ -708,6 +708,34 @@ export const api = {
     return result;
   },
 
+  async forgotPassword(email: string): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(
+      "/v1/auth/forgot-password",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+      false,
+    );
+  },
+
+  async resetPassword(
+    email: string,
+    code: string,
+    newPassword: string,
+  ): Promise<{ ok: boolean }> {
+    return request<{ ok: boolean }>(
+      "/v1/auth/reset-password",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, newPassword }),
+      },
+      false,
+    );
+  },
+
   async register(
     email: string,
     password: string,

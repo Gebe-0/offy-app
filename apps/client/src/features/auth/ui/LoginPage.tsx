@@ -8,6 +8,8 @@ import WindowControls from "@/features/navigation/ui/WindowControls";
 import LoginBrandPanel from "./LoginBrandPanel";
 import LoginBackdrop from "./LoginBackdrop";
 import LegalModal from "./LegalModal";
+import ForgotPasswordPanel from "./ForgotPasswordPanel";
+import { showToast } from "@/shared/ui";
 import { useWindowState } from "@/features/navigation/hooks/useWindowState";
 import {
   authErrorMessage,
@@ -43,6 +45,7 @@ export default function LoginPage() {
   >(null);
   const [legalOpen, setLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<"terms" | "privacy">("terms");
+  const [forgotMode, setForgotMode] = useState(false);
 
   const selectMode = (next: "login" | "register") => {
     if (submitting || next === mode) return;
@@ -215,6 +218,25 @@ export default function LoginPage() {
 
         <div className="flex w-full flex-col px-[28px] pb-[22px] pt-[26px]">
           <div className="flex flex-col pb-6">
+            {forgotMode ? (
+              <div className="w-full">
+                <h2 className="text-[18px] font-[600] text-text-primary">
+                  Recuperar senha
+                </h2>
+                <ForgotPasswordPanel
+                  initialEmail={email}
+                  onCancel={() => setForgotMode(false)}
+                  onSuccess={(resetEmail) => {
+                    setEmail(resetEmail);
+                    setPassword("");
+                    setError("");
+                    setMode("login");
+                    setForgotMode(false);
+                    showToast.success("Senha alterada com sucesso!");
+                  }}
+                />
+              </div>
+            ) : (
             <div className="w-full">
               <div className="flex gap-[8px]">
                 {(
@@ -529,6 +551,16 @@ export default function LoginPage() {
                           t("login.btn_sign_in")
                         )}
                       </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setForgotMode(true);
+                        }}
+                        className="mt-[12px] w-full cursor-pointer border-none bg-transparent text-center text-[12.5px] font-[500] text-text-tertiary transition-colors hover:text-text-primary"
+                      >
+                        Esqueci minha senha
+                      </button>
                     </motion.div>
                   ) : registerStep === 1 ? (
                     <motion.div
@@ -598,6 +630,7 @@ export default function LoginPage() {
                 </AnimatePresence>
               </form>
             </div>
+            )}
           </div>
 
           {/* Bottom: legal warning */}

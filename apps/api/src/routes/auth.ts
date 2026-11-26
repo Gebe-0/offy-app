@@ -1,6 +1,8 @@
+import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AuthTokens } from "@offy/contracts";
 import { sql } from "../db.js";
+import { sendPasswordResetEmail } from "../email.js";
 import {
   accessTokenExpiry,
   hashPassword,
@@ -118,6 +120,119 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         throw new ApiError(401, "INVALID_CREDENTIALS", "INVALID_CREDENTIALS");
       }
       return reply.send(await issueTokens(row));
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/v1/auth/forgot-password", async (request, reply) => {
+    try {
+      throttle(`forgot:${request.ip}`, 5);
+      const body = (request.body ?? {}) as { email?: unknown };
+      const email = requireEmail(body.email);
+
+      const rows = await sql`select id from users where lower(email) = ${email} limit 1`;
+      const user = rows[0];
+      if (user) {
+        const code = String(crypto.randomInt(100000, 1000000));
+        const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+        const expiresAt = new Date(Date.now() + 15 * 60_000);
+
+        await sql`
+          update password_reset_codes
+          set used_at = now()
+          where user_id = ${user.id} and used_at is null
+        `;
+        await sql`
+          insert into password_reset_codes (user_id, code_hash, expires_at)
+          values (${user.id}, ${codeHash}, ${expiresAt})
+        `;
+
+        try {
+          await sendPasswordResetEmail(email, code);
+        } catch (mailErr) {
+          request.log.error(mailErr, "failed to send password reset email");
+        }
+      }
+
+      // Resposta neutra anti-enumeração
+      return reply.send({ ok: true });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/v1/auth/reset-password", async (request, reply) => {
+    try {
+      throttle(`reset:${request.ip}`, 10);
+      const body = (request.body ?? {}) as {
+        email?: unknown;
+        code?: unknown;
+        newPassword?: unknown;
+      };
+      const email = requireEmail(body.email);
+      const code = typeof body.code === "string" ? body.code.trim() : "";
+      const newPassword = requirePassword(body.newPassword);
+
+      if (!/^\d{6}$/.test(code)) {
+        throw new ApiError(400, "Código inválido ou expirado.", "INVALID_OR_EXPIRED_CODE");
+      }
+
+      const users = await sql`select id from users where lower(email) = ${email} limit 1`;
+      const user = users[0];
+      if (!user) {
+        throw new ApiError(400, "Código inválido ou expirado.", "INVALID_OR_EXPIRED_CODE");
+      }
+
+      const codes = await sql`
+        select id, code_hash, attempts, expires_at
+        from password_reset_codes
+        where user_id = ${user.id} and used_at is null
+        order by created_at desc
+        limit 1
+      `;
+      const record = codes[0];
+      if (
+        !record ||
+        record.attempts >= 5 ||
+        new Date(record.expires_at).getTime() < Date.now()
+      ) {
+        throw new ApiError(400, "Código inválido ou expirado.", "INVALID_OR_EXPIRED_CODE");
+      }
+
+      const incomingHash = crypto.createHash("sha256").update(code).digest("hex");
+      const expectedBuf = Buffer.from(String(record.code_hash), "hex");
+      const incomingBuf = Buffer.from(incomingHash, "hex");
+      const valid =
+        expectedBuf.length === incomingBuf.length &&
+        crypto.timingSafeEqual(expectedBuf, incomingBuf);
+
+      if (!valid) {
+        await sql`
+          update password_reset_codes
+          set attempts = attempts + 1
+          where id = ${record.id}
+        `;
+        throw new ApiError(400, "Código inválido ou expirado.", "INVALID_OR_EXPIRED_CODE");
+      }
+
+      await sql`
+        update users
+        set password_hash = ${hashPassword(newPassword)}
+        where id = ${user.id}
+      `;
+      await sql`
+        update password_reset_codes
+        set used_at = now()
+        where id = ${record.id}
+      `;
+      await sql`
+        update refresh_tokens
+        set revoked_at = now()
+        where user_id = ${user.id} and revoked_at is null
+      `;
+
+      return reply.send({ ok: true });
     } catch (error) {
       return sendError(reply, error);
     }
