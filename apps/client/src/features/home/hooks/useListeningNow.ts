@@ -22,21 +22,36 @@ function rankOf(id: string): number {
 
 export function useListeningNow() {
   const { data, isLoading } = useCachedResource(
-    "home:listening-now",
-    () =>
-      api
-        .getPopularTracks("12h", LISTENING_NOW_LIMIT)
-        .then((response) =>
-          (response.items ?? []).map((entry) => toClientTrack(entry.track)),
-        ),
+    "home:user-most-played",
+    async () => {
+      const history = await api.getHistory(undefined, 100);
+      const counts = new Map<string, { track: Track; count: number }>();
+      for (const entry of history.items ?? []) {
+        if (!entry.track?.id) continue;
+        const existing = counts.get(entry.track.id);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          counts.set(entry.track.id, {
+            track: toClientTrack(entry.track),
+            count: 1,
+          });
+        }
+      }
+      if (counts.size > 0) {
+        return Array.from(counts.values())
+          .sort((a, b) => b.count - a.count)
+          .slice(0, LISTENING_NOW_LIMIT)
+          .map((item) => item.track);
+      }
+      const popular = await api.getPopularTracks("all", LISTENING_NOW_LIMIT);
+      return (popular.items ?? []).map((entry) => toClientTrack(entry.track));
+    },
     LISTENING_NOW_POLICY,
   );
 
   const tracks = useMemo<Track[]>(
-    () =>
-      [...(data ?? [])]
-        .sort((a, b) => rankOf(a.id) - rankOf(b.id))
-        .slice(0, LISTENING_NOW_LIMIT),
+    () => (data ?? []).slice(0, LISTENING_NOW_LIMIT),
     [data],
   );
 

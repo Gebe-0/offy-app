@@ -648,13 +648,13 @@ function MiniPlayer({
       </AnimatePresence>
 
       <div
-        className={`relative h-[76px] w-full overflow-hidden ${
+        className={`relative h-[64px] w-full overflow-hidden rounded-[16px] backdrop-blur-[48px] backdrop-saturate-150 ${
           isLight
-            ? "rounded-[16px] border border-black/[0.08] bg-bg-primary"
-            : "rounded-[16px] border border-white/[0.06] bg-[#0b0d0b]"
+            ? "border border-black/[0.08] bg-white/75"
+            : "border border-white/[0.08] bg-bg-glass dark:bg-black/35"
         }`}
       >
-        <div className="relative grid h-full grid-cols-[minmax(180px,1fr)_minmax(300px,540px)_minmax(210px,1fr)] items-center gap-[16px] px-[14px]">
+        <div className="relative grid h-full grid-cols-[minmax(180px,1fr)_minmax(300px,540px)_minmax(210px,1fr)] items-center gap-[16px] px-[12px]">
           {/* Left: Cover + Track Info + Like */}
           <div
             className="flex min-w-0 items-center gap-[12px]"
@@ -677,7 +677,7 @@ function MiniPlayer({
               role="button"
               tabIndex={0}
               aria-label="Open player"
-              className={`relative h-[48px] w-[48px] shrink-0 overflow-hidden rounded-[10px] bg-bg-elevated cursor-pointer ${
+              className={`relative h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[9px] bg-bg-elevated cursor-pointer ${
                 coverUrl && !isCoverLoaded ? "animate-pulse" : ""
               }`}
               onClick={onFullscreenOpen}
@@ -686,14 +686,14 @@ function MiniPlayer({
                 key={coverUrl}
                 src={coverUrl}
                 alt="Track artwork"
-                width={48}
-                height={48}
+                width={44}
+                height={44}
                 priority
                 draggable={false}
                 onLoad={(e) => {
                   extractAccentColor(e.currentTarget as HTMLImageElement);
                 }}
-                className="h-[48px] w-[48px] object-cover rounded-[10px]"
+                className="h-[44px] w-[44px] object-cover rounded-[9px]"
               />
             </div>
             <div className="flex min-w-0 flex-col">
@@ -755,8 +755,8 @@ function MiniPlayer({
           </div>
 
           {/* Center: Transport Controls + Timeline with Timestamps */}
-          <div className="flex w-full flex-col items-center justify-center gap-[4px]">
-            <div className="flex items-center justify-center gap-[14px]">
+          <div className="flex w-full flex-col items-center justify-center gap-[1px]">
+            <div className="flex items-center justify-center gap-[12px]">
               <button
                 type="button"
                 aria-label="Shuffle"
@@ -770,7 +770,7 @@ function MiniPlayer({
                 }`}
                 onClick={() => playerEngine.setShuffle(!player.shuffle)}
               >
-                <Shuffle size={17} weight="Outline" />
+                <Shuffle size={16} weight="Outline" />
               </button>
               <button
                 type="button"
@@ -781,12 +781,12 @@ function MiniPlayer({
                 }}
                 style={{ cursor: "pointer" }}
               >
-                <SkipPrevious size={19} weight="Bold" />
+                <SkipPrevious size={18} weight="Bold" />
               </button>
               <button
                 type="button"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-transform duration-150 ease-out hover:scale-105 active:scale-[0.95] border-none cursor-pointer shadow-sm"
+                className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-full transition-transform duration-150 ease-out hover:scale-105 active:scale-[0.95] border-none cursor-pointer shadow-sm"
                 onClick={() => {
                   void playerEngine.togglePlayPause();
                 }}
@@ -795,22 +795,20 @@ function MiniPlayer({
                   color: isLight ? "#ffffff" : "#0b0d0b",
                 }}
               >
-                <span className="relative flex h-[17px] w-[17px] items-center justify-center">
+                <span className="relative flex h-[16px] w-[16px] items-center justify-center">
                   <span
                     className={`absolute inset-0 flex items-center justify-center ${
                       isLoading ? "opacity-0" : ""
-                    } transition-transform ${
-                      isPlaying ? "" : "translate-x-[1px]"
                     }`}
                   >
                     <PlayerMorphIcon
                       icon={isPlaying ? ICON_PAUSE : ICON_PLAY}
-                      size={17}
+                      size={16}
                     />
                   </span>
                   {isLoading && (
                     <span
-                      className="absolute h-[16px] w-[16px] animate-spin rounded-full border-[2px] border-current border-t-transparent"
+                      className="absolute h-[15px] w-[15px] animate-spin rounded-full border-[2px] border-current border-t-transparent"
                       aria-label="Loading playback"
                     />
                   )}
