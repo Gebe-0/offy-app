@@ -12,7 +12,7 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.10",
     "postgres": "^3.4.5"
   }
 }
