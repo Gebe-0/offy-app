@@ -17,8 +17,8 @@
                 },
     "dependencies":  {
                          "@offy/contracts":  "workspace:*",
-                         "@braccato/provider-blyrics":  "0.2.3",
-                         "@braccato/parsers":  "0.4.0"
+                         "@braccato/provider-blyrics":  "0.2.4",
+                         "@braccato/parsers":  "0.4.3"
                      },
     "devDependencies":  {
                             "@types/node":  "^22.10.5",

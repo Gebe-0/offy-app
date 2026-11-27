@@ -12,13 +12,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@braccato/parsers": "0.4.0",
-    "@braccato/provider-blyrics": "0.2.3",
+    "@braccato/parsers": "0.4.3",
+    "@braccato/provider-blyrics": "0.2.4",
     "@fastify/cors": "^10.0.1",
     "@offy/contracts": "workspace:*",
     "@offy/core": "workspace:*",
     "dotenv": "^16.4.7",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.8",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
