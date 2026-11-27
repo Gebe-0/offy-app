@@ -14,7 +14,7 @@
   "dependencies": {
     "@braccato/parsers": "0.4.0",
     "@braccato/provider-blyrics": "0.2.3",
-    "@fastify/cors": "^10.0.1",
+    "@fastify/cors": "^11.4.3",
     "@offy/contracts": "workspace:*",
     "@offy/core": "workspace:*",
     "dotenv": "^16.4.7",
