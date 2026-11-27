@@ -474,14 +474,8 @@ function MiniPlayer({
         Math.max(0, volumeLevel + delta),
       );
       playerEngine.setVolume(toVolumeGain(nextLevel, maxVolumeLevel));
-      setVolumeOpen(true);
-      clearVolumeHoverTimer();
-      if (volumePinnedRef.current) return;
-      volumeHoverCloseTimerRef.current = setTimeout(() => {
-        setVolumeOpen(false);
-      }, 1200);
     },
-    [clearVolumeHoverTimer, maxVolumeLevel, volumeLevel],
+    [maxVolumeLevel, volumeLevel],
   );
 
   const handleVolumeDraggingChange = useCallback((dragging: boolean) => {
