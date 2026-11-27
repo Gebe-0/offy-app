@@ -8,7 +8,7 @@ import {
 
 const GRAIN_PERIOD = 0.038;
 const NUM_TAPS = 4;
-const GRAPH_VERSION = 2;
+const GRAPH_VERSION = 3;
 const BRANCH_TEARDOWN_MS = 200;
 const IDLE_SUSPEND_MS = 400;
 const REVERB_TAIL_SUSPEND_MS = 3000;
@@ -232,6 +232,7 @@ interface AudioEffectsGraph {
   eqChainGain: GainNode;
   eqBypassGain: GainNode;
   eqConnected: boolean;
+  outputBoostGain: GainNode;
   teardowns: Record<BranchName, ReturnType<typeof setTimeout> | null>;
 }
 
@@ -242,6 +243,7 @@ export interface AudioEffectsParams {
   reverbLevel?: number;
   isEqEnabled?: boolean;
   eqGains?: number[];
+  boostGain?: number;
 }
 
 function cancelTeardown(graph: AudioEffectsGraph, branch: BranchName): void {
@@ -343,7 +345,7 @@ function setEqStage(
     cancelTeardown(graph, "eq");
     if (!graph.eqConnected) {
       graph.masterOutputGain.connect(graph.eqPreamp);
-      graph.eqChainGain.connect(graph.ctx.destination);
+      graph.eqChainGain.connect(graph.outputBoostGain);
       graph.eqConnected = true;
     }
   }
@@ -364,7 +366,7 @@ function setEqStage(
     if (!graph.eqConnected) return;
     graph.eqConnected = false;
     graph.masterOutputGain.disconnect(graph.eqPreamp);
-    graph.eqChainGain.disconnect(graph.ctx.destination);
+    graph.eqChainGain.disconnect(graph.outputBoostGain);
   });
 }
 
@@ -392,6 +394,7 @@ function disposeStaleGraph(graph: any): void {
     for (const filter of graph.eqFilters ?? []) filter.disconnect();
     graph.eqChainGain?.disconnect();
     graph.eqBypassGain?.disconnect();
+    graph.outputBoostGain?.disconnect();
   } catch {}
 }
 
@@ -460,8 +463,12 @@ function buildGraph(
   }
   eqTail.connect(eqChainGain);
 
+  const outputBoostGain = ctx.createGain();
+  outputBoostGain.gain.value = 1.0;
+
   masterOutputGain.connect(eqBypassGain);
-  eqBypassGain.connect(ctx.destination);
+  eqBypassGain.connect(outputBoostGain);
+  outputBoostGain.connect(ctx.destination);
 
   return {
     version: GRAPH_VERSION,
@@ -483,6 +490,7 @@ function buildGraph(
     eqChainGain,
     eqBypassGain,
     eqConnected: false,
+    outputBoostGain,
     teardowns: { pitch: null, reverb: null, eq: null },
   };
 }
@@ -556,6 +564,7 @@ export class PitchShifterController {
           g.eqPreamp &&
           g.eqChainGain &&
           g.eqBypassGain &&
+          g.outputBoostGain &&
           g.eqFilters?.length === EQ_BANDS.length,
         );
       };
@@ -687,6 +696,7 @@ export class PitchShifterController {
     let reverbLevel = 0.35;
     let isEqEnabled = false;
     let eqGains = FLAT_EQ;
+    let boostGain = 1;
 
     if (typeof arg1 === "object" && arg1 !== null) {
       semitones = arg1.pitchSemitones ?? 0;
@@ -695,6 +705,7 @@ export class PitchShifterController {
       reverbLevel = arg1.reverbLevel ?? 0.35;
       isEqEnabled = arg1.isEqEnabled ?? false;
       eqGains = arg1.eqGains ?? FLAT_EQ;
+      boostGain = arg1.boostGain ?? 1;
     } else {
       semitones = typeof arg1 === "number" ? arg1 : 0;
       isPitchLinked = arg2 ?? true;
@@ -715,6 +726,11 @@ export class PitchShifterController {
 
     const eqActive = isEqActive(isEqEnabled, eqGains);
     setEqStage(this.graph, eqActive, eqActive ? eqGains : FLAT_EQ, now);
+
+    const clampedBoost = Number.isFinite(boostGain)
+      ? Math.min(2, Math.max(1, boostGain))
+      : 1;
+    this.graph.outputBoostGain.gain.setTargetAtTime(clampedBoost, now, 0.015);
   }
 }
 

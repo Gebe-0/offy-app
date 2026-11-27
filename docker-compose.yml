@@ -3,14 +3,14 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: offy
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-offy_secret_pass_2026}
-      POSTGRES_DB: offy
+      POSTGRES_USER: ${DB_USER:-offy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_DB: ${DB_NAME:-offy}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U offy -d offy"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-offy} -d ${DB_NAME:-offy}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,11 +25,11 @@ services:
       NODE_ENV: production
       PORT: 8080
       HOST: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-postgres://offy:offy_secret_pass_2026@db:5432/offy}
-      DATABASE_URL_DIRECT: ${DATABASE_URL_DIRECT:-postgres://offy:offy_secret_pass_2026@db:5432/offy}
-      AUTH_SECRET: ${AUTH_SECRET:-offy_super_secret_auth_token_key_2026}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      LOG_LEVEL: info
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set in .env}
+      DATABASE_URL_DIRECT: ${DATABASE_URL_DIRECT:-${DATABASE_URL:?DATABASE_URL must be set in .env}}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set in .env (min 32 chars)}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://api.cloudfy.shop,https://cloudfy.shop,https://offy.app}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     expose:
       - "8080"
     healthcheck:
@@ -48,7 +48,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-http://137.131.148.92, https://api.cloudfy.shop, https://137.131.148.92.sslip.io}
+      SITE_ADDRESS: ${SITE_ADDRESS:-https://api.cloudfy.shop, https://cloudfy.shop}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

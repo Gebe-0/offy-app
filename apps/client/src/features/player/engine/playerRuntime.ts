@@ -84,7 +84,7 @@ export class PlayerRuntime {
     this.setupAudioListeners(this.audio);
 
     const initialVolume = usePlayerStore.getState().volume;
-    this.audio.volume = initialVolume;
+    this.audio.volume = Math.min(1, Math.max(0, initialVolume));
     this.applyPlaybackRateAndPitch();
     log("cyan", "boot", `volume ${initialVolume}`);
 
@@ -92,11 +92,15 @@ export class PlayerRuntime {
       if (state.status !== prevState.status) {
         this.syncMediaSessionState(state.status);
       }
-      if (state.volume !== prevState.volume) {
+      if (
+        state.volume !== prevState.volume ||
+        state.audioBoostEnabled !== prevState.audioBoostEnabled
+      ) {
         this.cancelFade();
         if (!this.audio.paused) {
-          this.audio.volume = state.volume;
+          this.audio.volume = Math.min(1, Math.max(0, state.volume));
         }
+        this.applyPlaybackRateAndPitch();
       }
       if (
         state.playbackRate !== prevState.playbackRate ||
@@ -533,10 +537,15 @@ export class PlayerRuntime {
       const reverbLevel = store.reverbLevel ?? 0.35;
       const isEqEnabled = store.isEqEnabled ?? false;
       const eqGains = store.eqGains ?? FLAT_EQ;
+      const boostGain =
+        store.audioBoostEnabled && store.volume > 1
+          ? Math.min(2, store.volume)
+          : 1;
       const needsEffects =
         isReverbEnabled ||
         isEqActive(isEqEnabled, eqGains) ||
-        (!isPitchLinked && Math.abs(pitchSemitones) >= 0.05);
+        (!isPitchLinked && Math.abs(pitchSemitones) >= 0.05) ||
+        boostGain > 1.001;
       if (!needsEffects && !pitchShifter.isAttached()) return;
       pitchShifter.attach(this.audio);
       pitchShifter.update({
@@ -546,6 +555,7 @@ export class PlayerRuntime {
         reverbLevel,
         isEqEnabled,
         eqGains,
+        boostGain,
       });
     } catch (err) {
       console.error("[PlayerRuntime] applyPlaybackRateAndPitch error:", err);

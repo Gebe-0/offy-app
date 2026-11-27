@@ -1,7 +1,26 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "../db.js";
 import { ApiError, int, requireUserId, sendError, str } from "../http.js";
+import { isSafeHttpsUrl } from "../tracks.js";
 import { USERNAME_PATTERN, userProfile } from "../users.js";
+
+async function areFriends(a: string, b: string): Promise<boolean> {
+  const rows = await sql`
+    select 1 from friend_requests
+    where status = 'accepted'
+      and ((requester_id = ${a} and recipient_id = ${b})
+        or (requester_id = ${b} and recipient_id = ${a}))
+    limit 1
+  `;
+  return Boolean(rows[0]);
+}
+
+async function assertCanViewUser(viewerId: string, target: any): Promise<void> {
+  const targetId = String(target.id);
+  if (targetId === viewerId || Boolean(target.is_public ?? true)) return;
+  if (await areFriends(viewerId, targetId)) return;
+  throw new ApiError(403, "Este perfil é privado.", "PROFILE_PRIVATE");
+}
 
 async function findUser(idOrUsername: string): Promise<any> {
   const rows = await sql`
@@ -35,8 +54,9 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const limit = Math.min(50, Math.max(1, int(query.limit, 20)));
       const rows = await sql`
         select * from users
-        where lower(username) like ${`%${term.toLowerCase()}%`}
-           or lower(coalesce(display_name, '')) like ${`%${term.toLowerCase()}%`}
+        where (is_public = true or id = ${viewer})
+          and (lower(username) like ${`%${term.toLowerCase()}%`}
+            or lower(coalesce(display_name, '')) like ${`%${term.toLowerCase()}%`})
         order by username asc
         limit ${limit}
       `;
@@ -80,15 +100,21 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
         await sql`update users set username = ${username} where id = ${userId}`;
       }
 
-      const textFields: Array<[string, string]> = [
-        ["display_name", "displayName"],
-        ["avatar_url", "avatarUrl"],
-        ["bio", "bio"],
-        ["discord_handle", "discordHandle"],
+      const textFields: Array<[string, string, number]> = [
+        ["display_name", "displayName", 64],
+        ["avatar_url", "avatarUrl", 1024],
+        ["bio", "bio", 300],
+        ["discord_handle", "discordHandle", 64],
       ];
-      for (const [column, key] of textFields) {
+      for (const [column, key, maxLen] of textFields) {
         if (key in body) {
-          const value = typeof body[key] === "string" ? (body[key] as string) : null;
+          const raw = typeof body[key] === "string" ? (body[key] as string).trim() : null;
+          if (key === "avatarUrl" && raw) {
+            if (!isSafeHttpsUrl(raw, maxLen)) {
+              throw new ApiError(400, "INVALID_AVATAR_URL", "INVALID_AVATAR_URL");
+            }
+          }
+          const value = raw && raw.length > 0 ? raw.slice(0, maxLen) : null;
           await sql`update users set ${sql(column)} = ${value} where id = ${userId}`;
         }
       }
@@ -119,6 +145,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const viewer = requireUserId(request);
       const { id } = request.params as { id: string };
       const row = await findUser(id);
+      await assertCanViewUser(viewer, row);
       const follows = await sql`
         select 1 from follows where follower_id = ${viewer} and followee_id = ${row.id} limit 1
       `;
@@ -161,11 +188,12 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const viewer = requireUserId(request);
       const { id } = request.params as { id: string };
       const row = await findUser(id);
+      await assertCanViewUser(viewer, row);
       const rows = await sql`
         select u.* from follows f join users u on u.id = f.follower_id
-        where f.followee_id = ${row.id} order by f.created_at desc limit 100
+        where f.followee_id = ${row.id} and (u.is_public = true or u.id = ${viewer})
+        order by f.created_at desc limit 100
       `;
-      void viewer;
       return reply.send(rows.map((entry: any) => userProfile(entry, { followersCount: 0, followingCount: 0 })));
     } catch (error) {
       return sendError(reply, error);
@@ -177,11 +205,12 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const viewer = requireUserId(request);
       const { id } = request.params as { id: string };
       const row = await findUser(id);
+      await assertCanViewUser(viewer, row);
       const rows = await sql`
         select u.* from follows f join users u on u.id = f.followee_id
-        where f.follower_id = ${row.id} order by f.created_at desc limit 100
+        where f.follower_id = ${row.id} and (u.is_public = true or u.id = ${viewer})
+        order by f.created_at desc limit 100
       `;
-      void viewer;
       return reply.send(rows.map((entry: any) => userProfile(entry, { followersCount: 0, followingCount: 0 })));
     } catch (error) {
       return sendError(reply, error);
@@ -193,6 +222,7 @@ export async function registerUserRoutes(app: FastifyInstance): Promise<void> {
       const viewer = requireUserId(request);
       const { id } = request.params as { id: string };
       const row = await findUser(id);
+      await assertCanViewUser(viewer, row);
       const rows = await sql`
         select p.*, u.username as owner_username, u.display_name as owner_display_name, u.avatar_url as owner_avatar_url,
                (select count(*) from playlist_items i where i.playlist_id = p.id) as track_count

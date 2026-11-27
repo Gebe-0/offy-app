@@ -569,6 +569,10 @@ const api: LinerElectronApi = {
 
 if (location.hostname === "www.youtube.com") {
   startPoTokenWorker();
-} else {
+} else if (
+  location.protocol === "file:" ||
+  location.hostname === "localhost" ||
+  location.hostname === "127.0.0.1"
+) {
   contextBridge.exposeInMainWorld("linerElectron", api);
 }

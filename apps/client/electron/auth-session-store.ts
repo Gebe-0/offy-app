@@ -46,14 +46,31 @@ const REFRESH_PATH = "/v1/auth/refresh";
 const REFRESH_TIMEOUT_MS = 15_000;
 const REFRESH_ATTEMPTS = 2;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const TRUSTED_API_DOMAINS = ["offy.app", "cloudfy.shop"] as const;
 
-export function isTrustedApiBase(url: string): boolean {
+export function isTrustedApiBase(
+  url: string,
+  extraTrustedHosts: readonly string[] = [],
+): boolean {
   try {
     const { protocol, hostname } = new URL(url);
-    return (
-      protocol === "https:" ||
-      (protocol === "http:" && LOOPBACK_HOSTS.has(hostname))
-    );
+    const host = hostname.toLowerCase();
+    if (protocol === "http:" && LOOPBACK_HOSTS.has(host)) return true;
+    if (protocol !== "https:") return false;
+    if (
+      TRUSTED_API_DOMAINS.some(
+        (domain) => host === domain || host.endsWith(`.${domain}`),
+      )
+    ) {
+      return true;
+    }
+    const envApi = process.env.VITE_API_URL;
+    if (envApi) {
+      try {
+        if (new URL(envApi).hostname.toLowerCase() === host) return true;
+      } catch {}
+    }
+    return extraTrustedHosts.some((allowed) => allowed.toLowerCase() === host);
   } catch {
     return false;
   }

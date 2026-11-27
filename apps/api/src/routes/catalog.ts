@@ -3,6 +3,7 @@ import type { ApiTrackDetails, SearchType } from "@offy/contracts";
 import { browseAlbum, browseArtist, browsePlaylist, fetchVideoMeta, search } from "@offy/core";
 import { sql } from "../db.js";
 import { ApiError, int, requireUserId, sendError, str } from "../http.js";
+import { checkRateLimit } from "../rateLimit.js";
 import { rowToTrack, upsertTrack } from "../tracks.js";
 
 const SEARCH_TYPES: SearchType[] = ["all", "track", "artist", "album", "playlist"];
@@ -15,8 +16,9 @@ function asSearchType(value: unknown): SearchType {
 export async function registerCatalogRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/catalog/search", async (request, reply) => {
     try {
+      checkRateLimit(`catalog:${request.ip}`, 120);
       const query = request.query as Record<string, unknown>;
-      const term = str(query.q).trim();
+      const term = str(query.q).trim().slice(0, 200);
       if (!term) throw new ApiError(400, "QUERY_REQUIRED", "QUERY_REQUIRED");
       const type = asSearchType(query.type);
       const limit = Math.min(100, Math.max(1, int(query.limit, 30)));
@@ -29,6 +31,7 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/tracks/:id", async (request, reply) => {
     try {
+      checkRateLimit(`catalog:${request.ip}`, 120);
       const { id } = request.params as { id: string };
 
       const rows = await sql`select * from tracks where id = ${id} limit 1`;
@@ -47,7 +50,7 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
         durationMs: meta.durationMs,
         ...(meta.coverUrl ? { cover: { url: meta.coverUrl, width: 544, height: 544 } } : {}),
       };
-      await upsertTrack(sql, track);
+      await upsertTrack(sql, track, true);
       return reply.send({ ...track, viewer: { liked: false } } satisfies ApiTrackDetails);
     } catch (error) {
       return sendError(reply, error);
@@ -56,6 +59,7 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/albums/:id", async (request, reply) => {
     try {
+      checkRateLimit(`catalog:${request.ip}`, 120);
       const { id } = request.params as { id: string };
       const album = await browseAlbum(id);
       if (!album) throw new ApiError(404, "ALBUM_NOT_FOUND", "ALBUM_NOT_FOUND");
@@ -67,6 +71,7 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/artists/:id", async (request, reply) => {
     try {
+      checkRateLimit(`catalog:${request.ip}`, 120);
       const { id } = request.params as { id: string };
       const artist = await browseArtist(id);
       if (!artist) throw new ApiError(404, "ARTIST_NOT_FOUND", "ARTIST_NOT_FOUND");
@@ -78,6 +83,7 @@ export async function registerCatalogRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/catalog/playlists/:id", async (request, reply) => {
     try {
+      checkRateLimit(`catalog:${request.ip}`, 120);
       const { id } = request.params as { id: string };
       const playlist = await browsePlaylist(id);
       if (!playlist) throw new ApiError(404, "PLAYLIST_NOT_FOUND", "PLAYLIST_NOT_FOUND");

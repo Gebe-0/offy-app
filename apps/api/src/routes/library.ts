@@ -122,6 +122,9 @@ export async function registerLibraryRoutes(app: FastifyInstance): Promise<void>
       if (!COLLECTION_TYPES.has(type)) throw new ApiError(404, "UNKNOWN_COLLECTION", "UNKNOWN_COLLECTION");
       const record = (request.body ?? {}) as Record<string, unknown>;
       const snapshot = (record.snapshot ?? record) as Record<string, unknown>;
+      if (JSON.stringify(snapshot).length > 16 * 1024) {
+        throw new ApiError(400, "SNAPSHOT_TOO_LARGE", "SNAPSHOT_TOO_LARGE");
+      }
       await sql`
         insert into collections (user_id, kind, item_id, snapshot)
         values (${userId}, ${type}, ${id}, ${sql.json(snapshot as any)})

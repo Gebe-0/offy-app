@@ -4,7 +4,7 @@ import { useTranslation } from "@/languages";
 import { cn } from "@/shared/lib";
 import { usePlayerState } from "../hooks/usePlayerState";
 import { playerEngine } from "../engine/playerEngine";
-import { toVolumeGain, toVolumeLevel } from "../engine/volume";
+import { getMaxVolumeLevel, toVolumeGain, toVolumeLevel } from "../engine/volume";
 
 export interface VolumeColumnProps {
   onDraggingChange?: (dragging: boolean) => void;
@@ -14,7 +14,8 @@ const WHEEL_STEP = 0.04;
 const KEY_STEP = 0.05;
 const DEFAULT_RESTORE_LEVEL = 0.7;
 
-const clampLevel = (level: number) => Math.min(1, Math.max(0, level));
+const clampLevel = (level: number, maxLevel: number) =>
+  Math.min(maxLevel, Math.max(0, level));
 
 function VolumeIcon({ percent }: { percent: number }) {
   if (percent === 0) return <VolumeCross size={14} weight="Bold" />;
@@ -25,23 +26,27 @@ function VolumeIcon({ percent }: { percent: number }) {
 export function VolumeColumn({ onDraggingChange }: VolumeColumnProps) {
   const { t } = useTranslation();
   const player = usePlayerState();
+  const maxLevel = getMaxVolumeLevel(player.audioBoostEnabled);
+  const maxPercent = Math.round(maxLevel * 100);
   const trackRef = useRef<HTMLDivElement>(null);
   const restoreLevelRef = useRef(DEFAULT_RESTORE_LEVEL);
   const [dragLevel, setDragLevel] = useState<number | null>(null);
-  const level = dragLevel ?? toVolumeLevel(player.volume);
+  const level = dragLevel ?? toVolumeLevel(player.volume, maxLevel);
   const percent = Math.round(level * 100);
+  const fillPercent = Math.min(100, Math.max(0, (level / maxLevel) * 100));
 
   const apply = (next: number) => {
-    const clamped = clampLevel(next);
+    const clamped = clampLevel(next, maxLevel);
     if (clamped > 0) restoreLevelRef.current = clamped;
-    playerEngine.setVolume(toVolumeGain(clamped));
+    playerEngine.setVolume(toVolumeGain(clamped, maxLevel));
     return clamped;
   };
 
   const levelAt = (clientY: number) => {
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect || rect.height === 0) return level;
-    return clampLevel((rect.bottom - clientY) / rect.height);
+    const ratio = Math.min(1, Math.max(0, (rect.bottom - clientY) / rect.height));
+    return clampLevel(ratio * maxLevel, maxLevel);
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -73,7 +78,7 @@ export function VolumeColumn({ onDraggingChange }: VolumeColumnProps) {
           : event.key === "Home"
             ? 0
             : event.key === "End"
-              ? 1
+              ? maxLevel
               : null;
     if (next === null) return;
     event.preventDefault();
@@ -94,7 +99,7 @@ export function VolumeColumn({ onDraggingChange }: VolumeColumnProps) {
       aria-label={t("player.volume") || "Volume"}
       aria-orientation="vertical"
       aria-valuemin={0}
-      aria-valuemax={100}
+      aria-valuemax={maxPercent}
       aria-valuenow={percent}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -111,7 +116,7 @@ export function VolumeColumn({ onDraggingChange }: VolumeColumnProps) {
           "absolute inset-x-0 bottom-0 bg-text-primary/85",
           dragLevel === null && "transition-[height] duration-100 ease-out",
         )}
-        style={{ height: `${percent}%` }}
+        style={{ height: `${fillPercent}%` }}
       />
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between py-[6px] text-text-primary">
         <button
@@ -134,7 +139,7 @@ export function VolumeColumn({ onDraggingChange }: VolumeColumnProps) {
           "pointer-events-none absolute inset-0 flex flex-col items-center justify-between py-[6px] text-bg-primary",
           dragLevel === null && "transition-[clip-path] duration-100 ease-out",
         )}
-        style={{ clipPath: `inset(${100 - percent}% 0 0 0)` }}
+        style={{ clipPath: `inset(${100 - fillPercent}% 0 0 0)` }}
         aria-hidden="true"
       >
         <span className="flex size-[20px] items-center justify-center">

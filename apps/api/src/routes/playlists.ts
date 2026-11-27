@@ -108,7 +108,7 @@ export async function registerPlaylistRoutes(app: FastifyInstance): Promise<void
       if (!title) throw new ApiError(400, "TITLE_REQUIRED", "TITLE_REQUIRED");
       const rows = await sql`
         insert into playlists (owner_id, title, description, is_public)
-        values (${userId}, ${title.slice(0, 200)}, ${typeof body.description === "string" ? body.description : ""}, ${Boolean(body.isPublic)})
+        values (${userId}, ${title.slice(0, 200)}, ${typeof body.description === "string" ? body.description.slice(0, 1000) : ""}, ${Boolean(body.isPublic)})
         returning *
       `;
       return reply.status(201).send(playlistJson({ ...rows[0], track_count: 0 }));
@@ -157,7 +157,7 @@ export async function registerPlaylistRoutes(app: FastifyInstance): Promise<void
       const rows = await sql`
         update playlists set
           title = coalesce(${typeof body.title === "string" ? body.title.trim().slice(0, 200) : null}, title),
-          description = coalesce(${typeof body.description === "string" ? body.description : null}, description),
+          description = coalesce(${typeof body.description === "string" ? body.description.slice(0, 1000) : null}, description),
           is_public = coalesce(${typeof body.isPublic === "boolean" ? body.isPublic : null}, is_public),
           revision = revision + 1,
           updated_at = now()

@@ -9,7 +9,7 @@ import {
 } from "./morphPlayerIcons";
 import { usePlayerState } from "../hooks/usePlayerState";
 import { playerEngine } from "../engine/playerEngine";
-import { toVolumeGain, toVolumeLevel } from "../engine/volume";
+import { getMaxVolumeLevel, toVolumeGain, toVolumeLevel } from "../engine/volume";
 
 export interface VolumePickerProps {
   className?: string;
@@ -48,7 +48,9 @@ export const VolumePicker = memo(function VolumePicker({
 }: VolumePickerProps) {
   const isVertical = orientation === "vertical";
   const player = usePlayerState();
-  const volumeLevel = toVolumeLevel(player.volume);
+  const maxLevel = getMaxVolumeLevel(player.audioBoostEnabled);
+  const maxPercentage = Math.round(maxLevel * 100);
+  const volumeLevel = toVolumeLevel(player.volume, maxLevel);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -64,18 +66,19 @@ export const VolumePicker = memo(function VolumePicker({
   const currentLevel =
     isDragging && dragLevel !== null ? dragLevel : volumeLevel;
   const percentage = Math.round(currentLevel * 100);
+  const fillPercent = Math.min(100, Math.max(0, (currentLevel / maxLevel) * 100));
 
   const updateVolume = useCallback(
     (level: number) => {
-      const clamped = Math.min(1, Math.max(0, level));
-      const gain = toVolumeGain(clamped);
+      const clamped = Math.min(maxLevel, Math.max(0, level));
+      const gain = toVolumeGain(clamped, maxLevel);
       playerEngine.setVolume(gain);
       if (clamped > 0) {
         lastNonZeroVolumeRef.current = clamped;
       }
       onVolumeChange?.(clamped);
     },
-    [onVolumeChange],
+    [maxLevel, onVolumeChange],
   );
 
   const calculateLevelFromPointer = useCallback(
@@ -84,14 +87,14 @@ export const VolumePicker = memo(function VolumePicker({
       if (!rect) return currentLevel;
       if (isVertical) {
         if (rect.height === 0) return currentLevel;
-        const ratio = (rect.bottom - clientY) / rect.height;
-        return Math.min(1, Math.max(0, ratio));
+        const ratio = Math.min(1, Math.max(0, (rect.bottom - clientY) / rect.height));
+        return ratio * maxLevel;
       }
       if (rect.width === 0) return currentLevel;
-      const ratio = (clientX - rect.left) / rect.width;
-      return Math.min(1, Math.max(0, ratio));
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      return ratio * maxLevel;
     },
-    [currentLevel, isVertical],
+    [currentLevel, isVertical, maxLevel],
   );
 
   const handlePointerDown = useCallback(
@@ -134,10 +137,10 @@ export const VolumePicker = memo(function VolumePicker({
       e.stopPropagation();
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.04 : -0.04;
-      const nextLevel = Math.min(1, Math.max(0, currentLevel + delta));
+      const nextLevel = Math.min(maxLevel, Math.max(0, currentLevel + delta));
       updateVolume(nextLevel);
     },
-    [currentLevel, updateVolume],
+    [currentLevel, maxLevel, updateVolume],
   );
 
   const handleKeyDown = useCallback(
@@ -153,10 +156,10 @@ export const VolumePicker = memo(function VolumePicker({
         updateVolume(0);
       } else if (e.key === "End") {
         e.preventDefault();
-        updateVolume(1);
+        updateVolume(maxLevel);
       }
     },
-    [currentLevel, updateVolume],
+    [currentLevel, maxLevel, updateVolume],
   );
 
   const handleToggleMute = useCallback(() => {
@@ -213,7 +216,7 @@ export const VolumePicker = memo(function VolumePicker({
           aria-label="Volume"
           aria-orientation="vertical"
           aria-valuemin={0}
-          aria-valuemax={100}
+          aria-valuemax={maxPercentage}
           aria-valuenow={percentage}
           tabIndex={0}
           onKeyDown={handleKeyDown}
@@ -256,7 +259,7 @@ export const VolumePicker = memo(function VolumePicker({
                 isDragging ? "duration-0" : "duration-100"
               } ${fillClassName}`}
               style={{
-                height: `${percentage}%`,
+                height: `${fillPercent}%`,
                 ...(fillColor ? { backgroundColor: fillColor } : {}),
               }}
             />
@@ -363,7 +366,7 @@ export const VolumePicker = memo(function VolumePicker({
               isDragging ? "duration-0" : "duration-100"
             } ${fillClassName}`}
             style={{
-              width: `${percentage}%`,
+              width: `${fillPercent}%`,
               ...(fillColor ? { backgroundColor: fillColor } : {}),
             }}
           />

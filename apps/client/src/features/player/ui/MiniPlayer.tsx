@@ -29,7 +29,7 @@ import {
   useUnlikeTrack,
 } from "@/features/library/hooks";
 import { usePlayerStore } from "../store/playerStore";
-import { toVolumeGain, toVolumeLevel } from "../engine/volume";
+import { getMaxVolumeLevel, toVolumeGain, toVolumeLevel } from "../engine/volume";
 import { VolumeColumn } from "./VolumeColumn";
 import { SpeedPitchPicker } from "./SpeedPitchPicker";
 import { EqualizerPicker } from "./EqualizerPicker";
@@ -322,7 +322,12 @@ function MiniPlayer({
   const [isVolumeDragging, setIsVolumeDragging] = useState(false);
 
   const currentTrack = player.currentTrack;
-  const volumeLevel = toVolumeLevel(player.volume);
+  const maxVolumeLevel = getMaxVolumeLevel(player.audioBoostEnabled);
+  const volumeLevel = toVolumeLevel(player.volume, maxVolumeLevel);
+  const volumeFillPercent = Math.min(
+    100,
+    Math.max(0, (volumeLevel / maxVolumeLevel) * 100),
+  );
   const isLocal = isLocalTrackId(currentTrack?.id);
   const isLiked = useIsTrackLiked(currentTrack?.id);
   const eqActive = isEqActive(player.isEqEnabled, player.eqGains);
@@ -464,8 +469,11 @@ function MiniPlayer({
       e.stopPropagation();
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.04 : -0.04;
-      const nextLevel = Math.min(1, Math.max(0, volumeLevel + delta));
-      playerEngine.setVolume(toVolumeGain(nextLevel));
+      const nextLevel = Math.min(
+        maxVolumeLevel,
+        Math.max(0, volumeLevel + delta),
+      );
+      playerEngine.setVolume(toVolumeGain(nextLevel, maxVolumeLevel));
       setVolumeOpen(true);
       clearVolumeHoverTimer();
       if (volumePinnedRef.current) return;
@@ -473,7 +481,7 @@ function MiniPlayer({
         setVolumeOpen(false);
       }, 1200);
     },
-    [clearVolumeHoverTimer, volumeLevel],
+    [clearVolumeHoverTimer, maxVolumeLevel, volumeLevel],
   );
 
   const handleVolumeDraggingChange = useCallback((dragging: boolean) => {
@@ -977,7 +985,7 @@ function MiniPlayer({
                 tabIndex={0}
                 aria-label="Volume"
                 aria-valuemin={0}
-                aria-valuemax={100}
+                aria-valuemax={Math.round(maxVolumeLevel * 100)}
                 aria-valuenow={Math.round(volumeLevel * 100)}
                 className="group relative flex h-[18px] w-[84px] cursor-pointer items-center"
                 onPointerDown={(e) => {
@@ -990,7 +998,9 @@ function MiniPlayer({
                       0,
                       Math.min(1, (clientX - rect.left) / rect.width),
                     );
-                    playerEngine.setVolume(toVolumeGain(ratio));
+                    playerEngine.setVolume(
+                      toVolumeGain(ratio * maxVolumeLevel, maxVolumeLevel),
+                    );
                   };
                   update(e.clientX);
                   const onMove = (ev: PointerEvent) => update(ev.clientX);
@@ -1015,7 +1025,7 @@ function MiniPlayer({
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.round(volumeLevel * 100)}%`,
+                      width: `${volumeFillPercent}%`,
                       backgroundColor:
                         accentColorSolid || (isLight ? "#171717" : "#e2f5c8"),
                     }}

@@ -3,3 +3,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - "@kawarp/core@1.2.1"
   - "@kawarp/react@1.2.1"
+overrides:
+  undici: "^6.29.1"
+  js-yaml: "^4.3.2"
+  fast-xml-parser: "^5.12.0"

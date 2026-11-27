@@ -112,8 +112,35 @@ export async function registerFriendsRoutes(app: FastifyInstance): Promise<void>
         }
       }
 
-      const canSeeHistory = isSelf || Boolean(target.show_history);
-      const canSeeLikes = isSelf || Boolean(target.show_liked_tracks);
+      const canViewProfile = isSelf || Boolean(target.is_public ?? true) || friendshipStatus === "friends";
+      const canSeeHistory = canViewProfile && (isSelf || Boolean(target.show_history));
+      const canSeeLikes = canViewProfile && (isSelf || Boolean(target.show_liked_tracks));
+
+      if (!canViewProfile) {
+        return reply.send({
+          user: {
+            id: String(target.id),
+            username: String(target.username),
+            displayName: String(target.display_name || target.username),
+            avatarUrl: target.avatar_url ? String(target.avatar_url) : null,
+            discordHandle: null,
+            bio: "",
+            badges: [] as Array<{ id: string; label: string; icon?: string }>,
+          },
+          isSelf: false,
+          isPrivate: true,
+          friendsCount: 0,
+          friendAvatars: [],
+          pendingRequestsCount: 0,
+          friendshipStatus,
+          pendingRequestId,
+          recent: [],
+          topArtistsMonth: [],
+          topTracksMonth: [],
+          monthlyListeningMs: 0,
+          pinnedCards: [],
+        });
+      }
 
       // Recentes (últimas 5 faixas distintas tocadas)
       let recent: Array<{ track: ReturnType<typeof rowToTrack>; playedAt: string }> = [];

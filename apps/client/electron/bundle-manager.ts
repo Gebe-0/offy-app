@@ -35,6 +35,9 @@ export interface BundleUpdateProgress {
 const STARTUP_UPDATE_BUDGET_MS = 8_000;
 const STARTUP_MANIFEST_TIMEOUT_MS = 1_500;
 const BACKGROUND_MANIFEST_TIMEOUT_MS = 15_000;
+const MAX_BUNDLE_BYTES = 50 * 1024 * 1024;
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i;
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 
 export class BundleManager {
   private defaultRendererDist: string;
@@ -90,17 +93,23 @@ export class BundleManager {
       if (fs.existsSync(this.stateFilePath)) {
         const raw = fs.readFileSync(this.stateFilePath, "utf-8");
         const parsed = JSON.parse(raw) as ActiveBundleState;
-        const indexHtml = path.join(parsed.bundleDir, "dist", "index.html");
+        const resolvedBundlesRoot = path.resolve(this.bundlesRoot);
+        const resolvedBundleDir = path.resolve(parsed.bundleDir || "");
+        const withinBundlesRoot = resolvedBundleDir.startsWith(
+          resolvedBundlesRoot + path.sep,
+        );
+        const indexHtml = path.join(resolvedBundleDir, "dist", "index.html");
 
-        // Validate bundle exists on disk and is compatible with current appVersion
+        // Validate bundle exists on disk, stays inside bundlesRoot, and is compatible with current appVersion
         // a bundle older than the app itself is stale: the built-in dist is newer
         if (
+          withinBundlesRoot &&
           fs.existsSync(indexHtml) &&
           this.isVersionCompatible(app.getVersion(), parsed.minAppVersion) &&
           this.compareVersions(parsed.bundleVersion, app.getVersion()) >= 0
         ) {
-          this.activeState = parsed;
-          this.installedState = parsed;
+          this.activeState = { ...parsed, bundleDir: resolvedBundleDir };
+          this.installedState = this.activeState;
           return;
         } else {
           console.warn(
@@ -346,16 +355,50 @@ export class BundleManager {
   ): Promise<{ success: boolean; error?: string }> {
     if (this.isDownloading)
       return { success: false, error: "Already downloading" };
-    this.isDownloading = true;
 
-    const bundleDir = path.join(
-      this.bundlesRoot,
+    if (
+      !manifest ||
+      typeof manifest.bundleVersion !== "string" ||
+      !SEMVER_RE.test(manifest.bundleVersion) ||
+      typeof manifest.sha256 !== "string" ||
+      !SHA256_HEX_RE.test(manifest.sha256) ||
+      typeof manifest.downloadUrl !== "string" ||
+      typeof manifest.signature !== "string"
+    ) {
+      return { success: false, error: "Invalid bundle manifest" };
+    }
+
+    try {
+      const downloadTarget = new URL(manifest.downloadUrl);
+      const updaterBase = this.updaterUrl ? new URL(this.updaterUrl) : null;
+      if (
+        downloadTarget.protocol !== "https:" ||
+        !updaterBase ||
+        downloadTarget.origin !== updaterBase.origin
+      ) {
+        return { success: false, error: "Untrusted bundle download URL" };
+      }
+    } catch {
+      return { success: false, error: "Malformed bundle download URL" };
+    }
+
+    const resolvedRoot = path.resolve(this.bundlesRoot);
+    const bundleDir = path.resolve(
+      resolvedRoot,
       `bundle-${manifest.bundleVersion}-${manifest.sha256.slice(0, 8)}`,
     );
-    const tempDir = path.join(
-      this.bundlesRoot,
+    const tempDir = path.resolve(
+      resolvedRoot,
       `temp-${manifest.bundleVersion}-${Date.now()}`,
     );
+    if (
+      !bundleDir.startsWith(resolvedRoot + path.sep) ||
+      !tempDir.startsWith(resolvedRoot + path.sep)
+    ) {
+      return { success: false, error: "Invalid bundle target path" };
+    }
+
+    this.isDownloading = true;
 
     try {
       console.log(
@@ -374,8 +417,11 @@ export class BundleManager {
         const { done, value } = await reader.read();
         if (done) break;
         const chunkBuf = Buffer.from(value);
-        chunks.push(chunkBuf);
         transferred += chunkBuf.length;
+        if (transferred > MAX_BUNDLE_BYTES) {
+          throw new Error("Bundle exceeds maximum allowed size");
+        }
+        chunks.push(chunkBuf);
       }
 
       const archiveBuffer = Buffer.concat(chunks);

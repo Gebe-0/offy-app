@@ -4,7 +4,13 @@ export {
   type PlayerStatus,
   type PlayerStatus as PlaybackStatus,
 } from "./engine/playerEngine";
-export { toVolumeGain, toVolumeLevel } from "./engine/volume";
+export {
+  MAX_VOLUME_LEVEL,
+  MAX_BOOST_VOLUME_LEVEL,
+  getMaxVolumeLevel,
+  toVolumeGain,
+  toVolumeLevel,
+} from "./engine/volume";
 export { isRadioContext, nextRepeatMode } from "./engine/radioMode";
 export {
   usePlayerStore,

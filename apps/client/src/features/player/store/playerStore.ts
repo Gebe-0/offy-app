@@ -62,6 +62,7 @@ export interface SessionState {
   miniPlayerStyle: MiniPlayerStyle;
   accentVariant: AccentVariant;
   pauseOnDeviceChange: boolean;
+  audioBoostEnabled: boolean;
   autoplaySimilar: boolean;
   crossfadeDuration: number;
   trackDoubleClickBehavior: TrackDoubleClickBehavior;
@@ -120,6 +121,7 @@ export interface PlayerStore extends PlayerState {
   setMiniPlayerStyle: (style: MiniPlayerStyle) => void;
   setAccentVariant: (variant: AccentVariant) => void;
   setPauseOnDeviceChange: (value: boolean) => void;
+  setAudioBoostEnabled: (value: boolean) => void;
   setAutoplaySimilar: (value: boolean) => void;
   setCrossfadeDuration: (durationSeconds: number) => void;
   setTrackDoubleClickBehavior: (value: TrackDoubleClickBehavior) => void;
@@ -193,6 +195,7 @@ export const usePlayerStore = create<PlayerStore>()(
       miniPlayerStyle: "default",
       accentVariant: "default",
       pauseOnDeviceChange: true,
+      audioBoostEnabled: false,
       autoplaySimilar: true,
       crossfadeDuration: 0,
       trackDoubleClickBehavior: "play",
@@ -239,6 +242,14 @@ export const usePlayerStore = create<PlayerStore>()(
         set({ accentVariant }),
       setPauseOnDeviceChange: (pauseOnDeviceChange: boolean) =>
         set({ pauseOnDeviceChange }),
+      setAudioBoostEnabled: (audioBoostEnabled: boolean) => {
+        const currentVolume = get().volume;
+        if (!audioBoostEnabled && currentVolume > 1) {
+          set({ audioBoostEnabled, volume: 1 });
+          return;
+        }
+        set({ audioBoostEnabled });
+      },
       setAutoplaySimilar: (autoplaySimilar: boolean) =>
         set({ autoplaySimilar }),
       setCrossfadeDuration: (crossfadeDuration: number) =>
@@ -375,6 +386,14 @@ export const usePlayerStore = create<PlayerStore>()(
           if (typeof state.isEqEnabled !== "boolean") {
             state.isEqEnabled = false;
           }
+          if (typeof state.audioBoostEnabled !== "boolean") {
+            state.audioBoostEnabled = false;
+          }
+          if (!state.audioBoostEnabled && state.volume > 1) {
+            state.volume = 1;
+          } else if (state.volume > 2) {
+            state.volume = 2;
+          }
           state.eqGains = normalizeEqGains(state.eqGains);
           state.eqCustomPresets = normalizeEqCustomPresets(
             state.eqCustomPresets,
@@ -400,6 +419,7 @@ export const usePlayerStore = create<PlayerStore>()(
         miniPlayerStyle: state.miniPlayerStyle,
         accentVariant: state.accentVariant,
         pauseOnDeviceChange: state.pauseOnDeviceChange,
+        audioBoostEnabled: state.audioBoostEnabled,
         autoplaySimilar: state.autoplaySimilar,
         crossfadeDuration: state.crossfadeDuration,
         trackDoubleClickBehavior: state.trackDoubleClickBehavior,

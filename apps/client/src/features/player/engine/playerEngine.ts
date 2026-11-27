@@ -9,6 +9,7 @@ import { playerRuntime } from "./playerRuntime";
 import { isRadioContext, shouldRefillRadio } from "./radioMode";
 import { pitchShifter } from "./pitchShifter";
 import { EQ_MAX_CUSTOM_PRESETS, EQ_PRESET_NAME_MAX } from "./equalizer";
+import { getMaxVolumeLevel } from "./volume";
 import {
   api,
   type ApiRadioTrack,
@@ -865,7 +866,10 @@ class PlayerEngine {
   }
 
   public setVolume(volume: number): void {
-    usePlayerStore.getState().setVolume(Math.min(1, Math.max(0, volume)));
+    const maxGain = getMaxVolumeLevel(
+      usePlayerStore.getState().audioBoostEnabled,
+    );
+    usePlayerStore.getState().setVolume(Math.min(maxGain, Math.max(0, volume)));
   }
 
   public setVolumeSmooth(volume: number): void {

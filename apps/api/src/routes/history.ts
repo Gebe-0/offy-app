@@ -8,6 +8,7 @@ import type {
 import { search } from "@offy/core";
 import { sql } from "../db.js";
 import { ApiError, decodeCursor, encodeCursor, int, iso, requireUserId, sendError, str } from "../http.js";
+import { checkRateLimit } from "../rateLimit.js";
 import { ensureTrack, rowToTrack, upsertTrack } from "../tracks.js";
 
 const WINDOWS: Record<PopularTimeWindow, string> = {
@@ -36,11 +37,20 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
   app.post("/v1/me/playback/events", async (request, reply) => {
     try {
       const userId = requireUserId(request);
+      checkRateLimit(`playback:${userId}`, 60);
       const body = (request.body ?? {}) as Partial<RecordPlaybackEventRequest>;
-      const trackId = typeof body.trackId === "string" ? body.trackId : "";
+      const trackId = typeof body.trackId === "string" ? body.trackId.trim().slice(0, 128) : "";
       if (!trackId) throw new ApiError(400, "TRACK_REQUIRED", "TRACK_REQUIRED");
 
       await ensureTrack(sql, trackId, body.trackSnapshot);
+
+      const trackDurationMs = Math.min(24 * 60 * 60 * 1000, Math.max(0, int(body.trackDurationMs, 0)));
+      const maxPlayableMs = trackDurationMs > 0 ? Math.min(trackDurationMs * 2, 3_600_000) : 3_600_000;
+      const playedDurationMs = Math.min(maxPlayableMs, Math.max(0, int(body.playedDurationMs, 0)));
+      const loopCount = Math.min(100, Math.max(0, int(body.loopCount, 0)));
+      const completionRate = Number.isFinite(Number(body.completionRate))
+        ? Math.min(1, Math.max(0, Number(body.completionRate)))
+        : 0;
 
       await sql`
         insert into playback_events (
@@ -49,13 +59,13 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
           completed, skipped, loop_count, has_seek_backward, context
         ) values (
           ${userId}, ${trackId},
-          ${str(body.playbackSessionId)}, ${str(body.listeningSessionId)},
-          ${Math.max(0, int(body.playedDurationMs, 0))},
-          ${Math.max(0, int(body.trackDurationMs, 0))},
-          ${Number.isFinite(Number(body.completionRate)) ? Number(body.completionRate) : 0},
+          ${str(body.playbackSessionId).slice(0, 128)}, ${str(body.listeningSessionId).slice(0, 128)},
+          ${playedDurationMs},
+          ${trackDurationMs},
+          ${completionRate},
           ${Boolean(body.completed)}, ${Boolean(body.skipped)},
-          ${Math.max(0, int(body.loopCount, 0))}, ${Boolean(body.hasSeekBackward)},
-          ${body.context ? sql.json(body.context as any) : null}
+          ${loopCount}, ${Boolean(body.hasSeekBackward)},
+          ${body.context && JSON.stringify(body.context).length <= 4096 ? sql.json(body.context as any) : null}
         )
       `;
       return reply.status(204).send();
@@ -114,7 +124,7 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/users/:id/history", async (request, reply) => {
     try {
-      requireUserId(request);
+      const viewerId = requireUserId(request);
       const { id } = request.params as { id: string };
       const query = request.query as Record<string, unknown>;
       const limit = Math.min(100, Math.max(1, int(query.limit, 30)));
@@ -123,7 +133,8 @@ export async function registerHistoryRoutes(app: FastifyInstance): Promise<void>
         from playback_events e
         join tracks t on t.id = e.track_id
         join users u on u.id = e.user_id
-        where (u.id::text = ${id} or lower(u.username) = ${id.toLowerCase()}) and u.show_history = true
+        where (u.id::text = ${id} or lower(u.username) = ${id.toLowerCase()})
+          and (u.id = ${viewerId} or (u.is_public = true and u.show_history = true))
         order by e.created_at desc limit ${limit}
       `;
       return reply.send({

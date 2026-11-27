@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   playerEngine,
   usePlayerStore,
+  getMaxVolumeLevel,
   toVolumeGain,
   toVolumeLevel,
 } from "@/features/player";
@@ -176,18 +177,22 @@ export function useGlobalShortcuts(options: GlobalShortcutsOptions): void {
 
       if (matchesShortcut(event, mainApp.volumeUp)) {
         event.preventDefault();
-        const level = toVolumeLevel(usePlayerStore.getState().volume);
-        const nextLevel = roundToPercent(Math.min(1, level + VOLUME_STEP));
-        playerEngine.setVolume(toVolumeGain(nextLevel));
+        const { volume, audioBoostEnabled } = usePlayerStore.getState();
+        const maxLevel = getMaxVolumeLevel(audioBoostEnabled);
+        const level = toVolumeLevel(volume, maxLevel);
+        const nextLevel = roundToPercent(Math.min(maxLevel, level + VOLUME_STEP));
+        playerEngine.setVolume(toVolumeGain(nextLevel, maxLevel));
         if (nextLevel > 0) lastUnmutedLevelRef.current = nextLevel;
         return;
       }
 
       if (matchesShortcut(event, mainApp.volumeDown)) {
         event.preventDefault();
-        const level = toVolumeLevel(usePlayerStore.getState().volume);
+        const { volume, audioBoostEnabled } = usePlayerStore.getState();
+        const maxLevel = getMaxVolumeLevel(audioBoostEnabled);
+        const level = toVolumeLevel(volume, maxLevel);
         const nextLevel = roundToPercent(Math.max(0, level - VOLUME_STEP));
-        playerEngine.setVolume(toVolumeGain(nextLevel));
+        playerEngine.setVolume(toVolumeGain(nextLevel, maxLevel));
         if (nextLevel > 0) lastUnmutedLevelRef.current = nextLevel;
         return;
       }

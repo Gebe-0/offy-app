@@ -20,6 +20,7 @@ const EMPTY_STATE: PlayerState = {
   miniPlayerStyle: "default",
   accentVariant: "default",
   pauseOnDeviceChange: true,
+  audioBoostEnabled: false,
   autoplaySimilar: true,
   crossfadeDuration: 0,
   trackDoubleClickBehavior: "play",

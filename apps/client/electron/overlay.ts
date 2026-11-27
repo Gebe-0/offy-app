@@ -1138,7 +1138,7 @@ export class OverlayManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: false,
-        devTools: true,
+        devTools: !app.isPackaged,
         backgroundThrottling: false,
       },
     });

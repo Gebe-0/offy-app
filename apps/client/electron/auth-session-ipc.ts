@@ -8,6 +8,7 @@ import {
   type IpcMainInvokeEvent,
 } from "electron";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   AuthSessionStore,
   type AuthSessionStoreDeps,
@@ -38,7 +39,20 @@ function signedRequestHeaders(
 
 function isAppUrl(url: string | undefined): boolean {
   if (!url) return false;
-  if (url.startsWith("file:")) return true;
+  if (url.startsWith("file:")) {
+    try {
+      const resolved = path.resolve(fileURLToPath(url));
+      const allowedRoots = [
+        path.resolve(app.getAppPath(), "dist"),
+        path.resolve(app.getPath("userData"), "bundles"),
+      ];
+      return allowedRoots.some(
+        (root) => resolved === root || resolved.startsWith(root + path.sep),
+      );
+    } catch {
+      return false;
+    }
+  }
   const devServer = process.env.VITE_DEV_SERVER_URL;
   if (!devServer) return false;
   try {

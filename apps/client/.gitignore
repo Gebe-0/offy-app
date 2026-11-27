@@ -14,8 +14,10 @@
 !/build/icon.ico
 !/build/icon-mac.png
 !/build/icon-mac.svg
-!/build/certs/
-!/build/certs/*
+/build/certs/
+*.pfx
+*.p12
+*.key
 !/build/installerSidebar.bmp
 !/build/installerHeader.bmp
 !/build/installer.nsh

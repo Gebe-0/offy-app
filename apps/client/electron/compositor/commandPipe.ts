@@ -11,9 +11,19 @@ export interface CommandPipe {
   dispose: () => void;
 }
 
-function pipePath(): string {
-  const base = process.env.XDG_RUNTIME_DIR || os.tmpdir();
-  return path.join(base, `liner-${process.pid}.cmd`);
+function createPipePath(): { target: string; ownedDir: string | null } {
+  if (process.env.XDG_RUNTIME_DIR) {
+    return {
+      target: path.join(process.env.XDG_RUNTIME_DIR, `liner-${process.pid}.cmd`),
+      ownedDir: null,
+    };
+  }
+  const ownedDir = fs.mkdtempSync(path.join(os.tmpdir(), "offy-ipc-"));
+  fs.chmodSync(ownedDir, 0o700);
+  return {
+    target: path.join(ownedDir, `liner-${process.pid}.cmd`),
+    ownedDir,
+  };
 }
 
 function shellQuote(value: string): string {
@@ -23,12 +33,17 @@ function shellQuote(value: string): string {
 export function openCommandPipe(
   onAction: (action: string) => void,
 ): CommandPipe | null {
-  const target = pipePath();
+  const { target, ownedDir } = createPipePath();
+  const cleanupPaths = () => {
+    fs.rmSync(target, { force: true });
+    if (ownedDir) fs.rmSync(ownedDir, { recursive: true, force: true });
+  };
   try {
     fs.rmSync(target, { force: true });
     execFileSync("mkfifo", ["-m", "600", target]);
   } catch (error) {
     console.warn("[compositor] could not create command pipe:", error);
+    cleanupPaths();
     return null;
   }
 
@@ -41,7 +56,7 @@ export function openCommandPipe(
     socket = new net.Socket({ fd, readable: true, writable: false });
   } catch (error) {
     console.warn("[compositor] could not open command pipe:", error);
-    fs.rmSync(target, { force: true });
+    cleanupPaths();
     return null;
   }
 
@@ -62,13 +77,16 @@ export function openCommandPipe(
 
   return {
     commandFor: (action) => {
+      if (!ACTION_PATTERN.test(action)) {
+        throw new Error(`Invalid compositor action: ${action}`);
+      }
       const quoted = shellQuote(target);
-      return `test -p ${quoted} && printf '%s\\n' ${action} 1<>${quoted}`;
+      return `test -p ${quoted} && printf '%s\\n' ${shellQuote(action)} 1<>${quoted}`;
     },
     dispose: () => {
       socket?.destroy();
       socket = null;
-      fs.rmSync(target, { force: true });
+      cleanupPaths();
     },
   };
 }

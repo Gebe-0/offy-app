@@ -899,6 +899,10 @@
         "title": "Pausar ao trocar de dispositivo",
         "description": "Pausa automaticamente a reprodução quando o dispositivo de saída de áudio muda."
       },
+      "audio_boost": {
+        "title": "Audio Boost",
+        "description": "Libera o controle de volume acima de 100%, permitindo amplificar o som até 200%."
+      },
       "download_current_song": {
         "title": "Baixar a música atual",
         "description": "Baixe a faixa da reprodução atual como um arquivo MP3."

@@ -1,11 +1,67 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { sql } from "../db.js";
-import { ApiError, sendError } from "../http.js";
+import { ApiError, requireUserId, sendError } from "../http.js";
 import { verifyAccessToken } from "../auth.js";
+import { checkRateLimit } from "../rateLimit.js";
+import { allowedOrigins } from "../server.js";
 import { escapeHtml } from "./share.js";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MAX_ROOMS = 2000;
+const MAX_PARTICIPANTS = 50;
+const MAX_SUBSCRIBERS = 100;
+const MAX_TRACK_JSON_BYTES = 8 * 1024;
+const TICKET_TTL_MS = 30_000;
+
+interface JamTicket {
+  userId: string;
+  code: string;
+  expiresAt: number;
+}
+
+const sseTickets = new Map<string, JamTicket>();
+
+function issueSseTicket(userId: string, code: string): string {
+  const now = Date.now();
+  if (sseTickets.size > 10_000) {
+    for (const [k, v] of sseTickets.entries()) {
+      if (now > v.expiresAt) sseTickets.delete(k);
+    }
+  }
+  const ticket = randomBytes(24).toString("base64url");
+  sseTickets.set(ticket, { userId, code, expiresAt: now + TICKET_TTL_MS });
+  return ticket;
+}
+
+function consumeSseTicket(ticket: string, code: string): string | null {
+  const entry = sseTickets.get(ticket);
+  if (!entry) return null;
+  sseTickets.delete(ticket);
+  if (entry.expiresAt < Date.now() || entry.code !== code) return null;
+  return entry.userId;
+}
+
+function validateTrackPayload(track: unknown): unknown {
+  if (track === null || track === undefined) return null;
+  if (typeof track !== "object" || Array.isArray(track)) {
+    throw new ApiError(400, "INVALID_TRACK", "INVALID_TRACK");
+  }
+  const serialized = JSON.stringify(track);
+  if (serialized.length > MAX_TRACK_JSON_BYTES) {
+    throw new ApiError(400, "TRACK_PAYLOAD_TOO_LARGE", "TRACK_PAYLOAD_TOO_LARGE");
+  }
+  return track;
+}
+
+function resolveSseCorsOrigin(originHeader: string | undefined): string | null {
+  if (!originHeader) return null;
+  for (const rule of allowedOrigins) {
+    if (typeof rule === "string" && rule === originHeader) return originHeader;
+    if (rule instanceof RegExp && rule.test(originHeader)) return originHeader;
+  }
+  return null;
+}
 
 function generateCode(): string {
   let code = "";
@@ -99,13 +155,19 @@ function broadcast(room: JamRoom, event: string, data: unknown) {
   }
 }
 
-function getUserIdFromRequest(request: FastifyRequest): string {
+function getUserIdFromSseRequest(request: FastifyRequest, code: string): string {
+  const query = request.query as Record<string, unknown>;
+  if (typeof query.ticket === "string" && query.ticket) {
+    const uid = consumeSseTicket(query.ticket, code);
+    if (uid) return uid;
+    throw new ApiError(401, "INVALID_OR_EXPIRED_TICKET", "UNAUTHORIZED");
+  }
   const header = request.headers.authorization;
   if (header?.startsWith("Bearer ")) {
     const payload = verifyAccessToken(header.slice(7));
     if (payload?.sub) return payload.sub;
   }
-  const query = request.query as Record<string, unknown>;
+  // Fallback legado apenas para clientes antigos no endpoint SSE
   if (typeof query.token === "string" && query.token) {
     const payload = verifyAccessToken(query.token);
     if (payload?.sub) return payload.sub;
@@ -130,7 +192,11 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Criar sala de Jam
   app.post("/v1/jam/create", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
+      checkRateLimit(`jam:create:${userId}`, 10);
+      if (rooms.size >= MAX_ROOMS) {
+        throw new ApiError(503, "Limite de salas Jam atingido.", "JAM_CAPACITY_REACHED");
+      }
       const user = await getUserInfo(userId);
 
       // Fecha salas antigas do mesmo host
@@ -152,13 +218,15 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         status?: "playing" | "paused" | "idle";
       };
 
+      const safeCurrentTrack = validateTrackPayload(body.currentTrack);
+
       const room: JamRoom = {
         code,
         hostId: userId,
         hostName: user.displayName,
         createdAt: Date.now(),
-        currentTrack: body.currentTrack ?? null,
-        status: body.status ?? (body.currentTrack ? "playing" : "idle"),
+        currentTrack: safeCurrentTrack,
+        status: body.status ?? (safeCurrentTrack ? "playing" : "idle"),
         positionMs: Math.max(0, Number(body.positionMs ?? 0)),
         updatedAt: Date.now(),
         allowGuestControl: body.allowGuestControl ?? true,
@@ -192,13 +260,16 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Entrar em uma sala existente
   app.post("/v1/jam/:code/join", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
       const room = rooms.get(code);
       if (!room) {
         throw new ApiError(404, "Sessão Jam não encontrada.", "JAM_NOT_FOUND");
+      }
+      if (!room.participants.has(userId) && room.participants.size >= MAX_PARTICIPANTS) {
+        throw new ApiError(403, "Sessão Jam lotada.", "JAM_ROOM_FULL");
       }
 
       const user = await getUserInfo(userId);
@@ -244,12 +315,16 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Obter detalhes da sala (polling ou leitura direta)
   app.get("/v1/jam/:code", async (request, reply) => {
     try {
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
       const room = rooms.get(code);
       if (!room) {
         throw new ApiError(404, "Sessão Jam não encontrada.", "JAM_NOT_FOUND");
+      }
+      if (!room.participants.has(userId)) {
+        throw new ApiError(403, "Você não está nesta Jam.", "NOT_IN_JAM");
       }
 
       return reply.send({
@@ -261,10 +336,29 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  // Emite ticket efêmero de uso único para autenticar EventSource sem expor JWT na URL
+  app.post("/v1/jam/:code/ticket", async (request, reply) => {
+    try {
+      const userId = requireUserId(request);
+      const params = request.params as { code?: string };
+      const code = (params.code ?? "").toUpperCase().trim();
+
+      const room = rooms.get(code);
+      if (!room) throw new ApiError(404, "Sessão Jam não encontrada.", "JAM_NOT_FOUND");
+      if (!room.participants.has(userId)) {
+        throw new ApiError(403, "Você não está nesta Jam.", "NOT_IN_JAM");
+      }
+
+      return reply.send({ ticket: issueSseTicket(userId, code), expiresInMs: TICKET_TTL_MS });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   // Configurações da sala (Host apenas)
   app.post("/v1/jam/:code/settings", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
@@ -292,7 +386,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Sair da sala
   app.post("/v1/jam/:code/leave", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
@@ -318,7 +412,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Fila da Jam: Adicionar música
   app.post("/v1/jam/:code/queue", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
@@ -335,7 +429,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
         if (room.queue.length >= 100) {
           throw new ApiError(400, "A fila atingiu o limite máximo de 100 faixas.", "QUEUE_LIMIT_REACHED");
         }
-        room.queue.push(body.track);
+        room.queue.push(validateTrackPayload(body.track));
         room.updatedAt = Date.now();
         broadcast(room, "queue_updated", { queue: room.queue });
       }
@@ -349,7 +443,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Fila da Jam: Remover música
   app.delete("/v1/jam/:code/queue/:trackId", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string; trackId?: string };
       const code = (params.code ?? "").toUpperCase().trim();
       const trackId = params.trackId ?? "";
@@ -375,7 +469,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Sincronizar estado (Play / Pause / Seek / Nova Faixa)
   app.post("/v1/jam/:code/sync", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
+      const userId = requireUserId(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
 
@@ -401,7 +495,7 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
 
       const now = Date.now();
       if (body.action === "TRACK_CHANGE" && body.track !== undefined) {
-        room.currentTrack = body.track;
+        room.currentTrack = validateTrackPayload(body.track);
         room.positionMs = safePos(body.positionMs);
         room.status = "playing";
         room.updatedAt = now;
@@ -440,9 +534,9 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
   // Stream Server-Sent Events (SSE) nativo e resiliente com hijack
   app.get("/v1/jam/:code/events", async (request, reply) => {
     try {
-      const userId = getUserIdFromRequest(request);
       const params = request.params as { code?: string };
       const code = (params.code ?? "").toUpperCase().trim();
+      const userId = getUserIdFromSseRequest(request, code);
 
       const room = rooms.get(code);
       if (!room) {
@@ -452,17 +546,21 @@ export async function registerJamRoutes(app: FastifyInstance): Promise<void> {
       if (!room.participants.has(userId)) {
         return reply.status(403).send({ code: "NOT_IN_JAM", message: "Must join room before subscribing to events." });
       }
+      if (room.subscribers.size >= MAX_SUBSCRIBERS) {
+        return reply.status(429).send({ code: "TOO_MANY_CONNECTIONS", message: "Too many active stream connections." });
+      }
 
       // Desacopla do Fastify lifecycle para manter conexão viva sem timeout
       reply.hijack();
 
+      const corsOrigin = resolveSseCorsOrigin(request.headers.origin);
       const res = reply.raw;
       res.writeHead(200, {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
-        "Access-Control-Allow-Origin": "*",
+        ...(corsOrigin ? { "Access-Control-Allow-Origin": corsOrigin, Vary: "Origin" } : {}),
       });
       res.flushHeaders?.();
 

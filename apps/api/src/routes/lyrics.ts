@@ -3,6 +3,7 @@ import type { LyricsCandidate, LyricsStreamEvent } from "@offy/contracts";
 import { runLyricsChain } from "@offy/core";
 import { sql } from "../db.js";
 import { ApiError, int, requireUserId, sendError, str } from "../http.js";
+import { checkRateLimit } from "../rateLimit.js";
 import { rowToTrack } from "../tracks.js";
 
 interface CachePayload {
@@ -50,7 +51,8 @@ async function writeCache(trackId: string, payload: CachePayload): Promise<void>
 export async function registerLyricsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/me/lyrics/search", async (request, reply) => {
     try {
-      requireUserId(request);
+      const userId = requireUserId(request);
+      checkRateLimit(`lyrics:${userId}`, 60);
       const query = request.query as Record<string, unknown>;
       const title = str(query.title).trim();
       if (!title) throw new ApiError(400, "TITLE_REQUIRED", "TITLE_REQUIRED");
@@ -71,14 +73,18 @@ export async function registerLyricsRoutes(app: FastifyInstance): Promise<void> 
 
   app.get("/v1/tracks/:id/lyrics", async (request, reply) => {
     try {
-      requireUserId(request);
+      const userId = requireUserId(request);
+      checkRateLimit(`lyrics:${userId}`, 60);
       const { id: trackId } = request.params as { id: string };
       const query = request.query as Record<string, unknown>;
 
       const hint = await trackHint(trackId);
-      const title = str(query.title).trim() || hint?.title || "";
-      const artist = str(query.artist).trim() || hint?.artist || "Unknown Artist";
-      const durationMs = query.durationMs ? int(query.durationMs, 0) : hint?.durationMs;
+      const queryTitle = str(query.title).trim();
+      const queryArtist = str(query.artist).trim();
+      const title = hint?.title || queryTitle;
+      const artist = hint?.artist || queryArtist || "Unknown Artist";
+      const durationMs = hint?.durationMs ?? (query.durationMs ? int(query.durationMs, 0) : undefined);
+      const canCacheGlobally = Boolean(hint?.title);
       if (!title) throw new ApiError(404, "TRACK_NOT_FOUND", "TRACK_NOT_FOUND");
 
       const cached = await readCache(trackId);
@@ -100,6 +106,7 @@ export async function registerLyricsRoutes(app: FastifyInstance): Promise<void> 
 
       const best = result.best;
 
+      reply.hijack();
       reply.raw.writeHead(200, {
         "content-type": "text/event-stream",
         "cache-control": "no-cache, no-transform",
@@ -148,7 +155,7 @@ export async function registerLyricsRoutes(app: FastifyInstance): Promise<void> 
 
       reply.raw.end();
 
-      if (best) {
+      if (best && canCacheGlobally) {
         await writeCache(trackId, { best, found }).catch(() => undefined);
       }
       return reply;

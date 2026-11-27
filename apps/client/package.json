@@ -81,8 +81,7 @@
       "icon": "build/icon.ico",
       "target": [
         "nsis"
-      ],
-      "verifyUpdateCodeSignature": false
+      ]
     },
     "nsis": {
       "artifactName": "OFFY-Setup-${version}.${ext}",

@@ -9,12 +9,14 @@ import {
 
 const playerState: {
   volume: number;
+  audioBoostEnabled: boolean;
   positionMs: number;
   durationMs: number;
   currentTrack: { id: string } | null;
   status: "idle" | "loading" | "playing" | "paused" | "error";
 } = {
   volume: 1,
+  audioBoostEnabled: false,
   positionMs: 10_000,
   durationMs: 60_000,
   currentTrack: null,
@@ -32,6 +34,7 @@ vi.mock("@/features/player", () => ({
     }),
   },
   usePlayerStore: { getState: () => playerState },
+  getMaxVolumeLevel: (boost: boolean) => (boost ? 2 : 1),
   toVolumeGain: (level: number) => level,
   toVolumeLevel: (gain: number) => gain,
 }));

@@ -19,8 +19,7 @@
     "@offy/core": "workspace:*",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
-    "postgres": "^3.4.5",
-    "zod": "^3.24.1"
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

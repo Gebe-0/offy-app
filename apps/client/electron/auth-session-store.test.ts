@@ -9,7 +9,7 @@ import {
   type StoredAuthSession,
 } from "./auth-session-store";
 
-const API = "https://api.example.test";
+const API = "https://api.cloudfy.shop";
 
 const session = (refreshToken: string): StoredAuthSession => ({
   accessToken: `access_${refreshToken}`,
@@ -228,7 +228,12 @@ describe("AuthSessionStore", () => {
     expect((await store.refresh("http://evil.example", "rt_1")).outcome).toBe(
       "transient",
     );
+    expect((await store.refresh("https://evil.example", "rt_1")).outcome).toBe(
+      "transient",
+    );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(isTrustedApiBase("http://localhost:1337")).toBe(true);
+    expect(isTrustedApiBase("https://evil.example")).toBe(false);
+    expect(isTrustedApiBase("https://api.cloudfy.shop")).toBe(true);
   });
 });

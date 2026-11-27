@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { sql } from "../db.js";
+import { checkRateLimit } from "../rateLimit.js";
+import { isSafeHttpsUrl } from "../tracks.js";
 
 export type ShareEntityType = "track" | "playlist" | "album" | "artist" | "home";
 
@@ -74,7 +76,7 @@ async function fetchExternalMeta(
       targetUrl = `https://www.youtube.com/channel/${id}`;
     } else if (type === "album" && /^MPRE[A-Za-z0-9_-]{4,64}$/.test(id)) {
       targetUrl = `https://music.youtube.com/browse/${id}`;
-    } else if (type === "playlist" && /^(?:VL)?PL[A-Za-z0-9_-]+$/.test(id)) {
+    } else if (type === "playlist" && /^(?:VL)?PL[A-Za-z0-9_-]{8,64}$/.test(id)) {
       const listId = id.startsWith("VL") ? id.slice(2) : id;
       targetUrl = `https://www.youtube.com/playlist?list=${listId}`;
     }
@@ -131,11 +133,16 @@ async function resolveEntityMeta(
   try {
     if (type === "track") {
       meta.badge = "Faixa";
-      const rows = await sql`select title, artists, cover_url from tracks where id = ${id} limit 1`;
+      const rows = await sql`select title, artists, cover->>'url' as cover_url from tracks where id = ${id} limit 1`;
       if (rows.length > 0 && rows[0].title) {
-        meta.title = rows[0].title;
-        meta.subtitle = rows[0].artists || "OFFY Music";
-        meta.coverUrl = rows[0].cover_url || null;
+        meta.title = String(rows[0].title);
+        const artistList = Array.isArray(rows[0].artists)
+          ? rows[0].artists.map((a: any) => a?.name).filter(Boolean).join(", ")
+          : typeof rows[0].artists === "string"
+            ? rows[0].artists
+            : "";
+        meta.subtitle = artistList || "OFFY Music";
+        meta.coverUrl = isSafeHttpsUrl(rows[0].cover_url) ? rows[0].cover_url : null;
         resolvedFromDb = true;
       }
     } else if (type === "playlist") {
@@ -450,7 +457,7 @@ export function renderShareHtml(
   const safeTitle = escapeHtml(meta.title);
   const safeSubtitle = escapeHtml(meta.subtitle);
   const safeBadge = escapeHtml(meta.badge);
-  const safeCoverUrl = meta.coverUrl ? escapeHtml(meta.coverUrl) : null;
+  const safeCoverUrl = isSafeHttpsUrl(meta.coverUrl) ? escapeHtml(meta.coverUrl) : null;
   const safeDeepLink = escapeHtml(appDeepLink);
 
   return `<!DOCTYPE html>
@@ -533,9 +540,14 @@ export async function registerShareRoutes(app: FastifyInstance): Promise<void> {
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
+    try {
+      checkRateLimit(`share:${request.ip}`, 60);
+    } catch {
+      return reply.status(429).type("text/plain").send("Too many requests");
+    }
     const query = request.query as Record<string, unknown>;
     const params = request.params as Record<string, string>;
-    const id = String(params.id || query.id || "").trim();
+    const id = String(params.id || query.id || "").trim().slice(0, 128);
 
     if (!id) {
       reply.status(404).type("text/html; charset=utf-8");

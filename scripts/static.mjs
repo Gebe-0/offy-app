@@ -20,9 +20,9 @@ const types = new Map([
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", "http://localhost");
   const relative = url.pathname === "/" ? "/index.html" : url.pathname;
-  const file = path.join(root, relative);
+  const file = path.resolve(root, relative.replace(/^\/+/, ""));
 
-  if (!file.startsWith(root)) {
+  if (file !== root && !file.startsWith(root + path.sep)) {
     response.writeHead(403);
     response.end("forbidden");
     return;

@@ -19,8 +19,8 @@ import { sendError } from "./http.js";
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? "info" },
-  bodyLimit: 8 * 1024 * 1024,
-  trustProxy: true,
+  bodyLimit: 1 * 1024 * 1024,
+  trustProxy: (_address, hop) => hop === 1,
 });
 
 // Suporta corpos vazios com content-type: application/json sem erro FST_ERR_CTP_EMPTY_JSON_BODY
@@ -41,19 +41,26 @@ app.addContentTypeParser(
   },
 );
 
-const allowedOrigins =
+export const allowedOrigins: Array<string | RegExp> =
   env.corsOrigin === "*"
     ? [
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+        ...(!env.isProduction ? [/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/] : []),
         /^https:\/\/([a-z0-9-]+\.)*offy\.app$/,
         /^https:\/\/([a-z0-9-]+\.)*cloudfy\.shop$/,
       ]
-    : env.corsOrigin.split(",").map((o) => o.trim());
+    : env.corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
 
 await app.register(cors, {
   origin: allowedOrigins,
   credentials: true,
   exposedHeaders: ["etag", "x-request-id"],
+});
+
+app.addHook("onSend", async (_request, reply, payload) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "no-referrer");
+  return payload;
 });
 
 app.get("/health", async () => {

@@ -1,5 +1,17 @@
-http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.sslip.io, https://api.cloudfy.shop, https://cloudfy.shop, :80 {
+:80 {
+	redir https://api.cloudfy.shop{uri} permanent
+}
+
+https://api.cloudfy.shop, https://cloudfy.shop {
 	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
 
 	@health path /health
 	handle @health {
@@ -22,6 +34,14 @@ http://137.131.148.92, http://137.131.148.92.sslip.io, https://137.131.148.92.ss
 
 	log {
 		output stdout
-		format console
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+				request>headers>Authorization delete
+			}
+		}
 	}
 }

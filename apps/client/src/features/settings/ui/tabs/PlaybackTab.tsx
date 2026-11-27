@@ -33,6 +33,10 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const setPauseOnDeviceChange = usePlayerStore(
     (state) => state.setPauseOnDeviceChange,
   );
+  const audioBoostEnabled = usePlayerStore((state) => state.audioBoostEnabled);
+  const setAudioBoostEnabled = usePlayerStore(
+    (state) => state.setAudioBoostEnabled,
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -146,6 +150,20 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
           <ToggleSwitch
             checked={pauseOnDeviceChange}
             onChange={setPauseOnDeviceChange}
+          />
+        }
+      />
+
+      <SettingRow
+        title={t("settings.audio.audio_boost.title")}
+        description={t("settings.audio.audio_boost.description")}
+        titleKey="settings.audio.audio_boost.title"
+        descKey="settings.audio.audio_boost.description"
+        searchQuery={searchQuery}
+        control={
+          <ToggleSwitch
+            checked={audioBoostEnabled}
+            onChange={setAudioBoostEnabled}
           />
         }
       />

@@ -239,4 +239,20 @@ describe("BundleManager", () => {
       fs.readdirSync(path.join(env.userData, "bundles")).length,
     ).toBeGreaterThanOrEqual(1);
   });
+
+  it("rejects manifests with path traversal in bundleVersion or untrusted downloadUrl", async () => {
+    const bundles = manager();
+    const release = makeBundle("0.1.45");
+    const traversal = await bundles.downloadAndInstall({
+      ...release.manifest,
+      bundleVersion: "../../outside",
+    });
+    expect(traversal.success).toBe(false);
+
+    const untrustedUrl = await bundles.downloadAndInstall({
+      ...release.manifest,
+      downloadUrl: "https://evil.example/bundle.tar.gz",
+    });
+    expect(untrustedUrl.success).toBe(false);
+  });
 });

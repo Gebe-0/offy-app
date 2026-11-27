@@ -416,10 +416,28 @@ function stopRealtimeSync() {
   }
 }
 
-function startRealtimeSync(code: string, token: string) {
+async function startRealtimeSync(code: string, token: string) {
   stopRealtimeSync();
 
-  const sseUrl = `${getApiBaseUrl()}/v1/jam/${encodeURIComponent(code)}/events?token=${encodeURIComponent(token)}`;
+  let sseUrl = `${getApiBaseUrl()}/v1/jam/${encodeURIComponent(code)}/events?token=${encodeURIComponent(token)}`;
+  try {
+    const ticketRes = await fetch(
+      `${getApiBaseUrl()}/v1/jam/${encodeURIComponent(code)}/ticket`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (ticketRes.ok) {
+      const { ticket } = (await ticketRes.json()) as { ticket?: string };
+      if (ticket) {
+        sseUrl = `${getApiBaseUrl()}/v1/jam/${encodeURIComponent(code)}/events?ticket=${encodeURIComponent(ticket)}`;
+      }
+    }
+  } catch {
+    // Fallback para servidores antigos que ainda não expõem /ticket
+  }
+
   const es = new EventSource(sseUrl);
   activeEventSource = es;
 

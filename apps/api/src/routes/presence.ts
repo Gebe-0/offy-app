@@ -54,6 +54,7 @@ export async function registerPresenceRoutes(app: FastifyInstance): Promise<void
         join tracks t on t.id = p.track_id
         join users u on u.id = p.user_id
         where p.updated_at > now() - ${`${STALE_SECONDS} seconds`}::interval
+          and u.is_public = true
           and u.show_activity = true
         order by p.updated_at desc
         limit ${limit}

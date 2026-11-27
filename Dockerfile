@@ -34,8 +34,10 @@ COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 
-RUN pnpm install --frozen-lockfile --ignore-scripts --offline
+RUN pnpm install --frozen-lockfile --ignore-scripts --offline \
+ && chown -R node:node /app
 
+USER node
 WORKDIR /app/apps/api
 EXPOSE 8080
 CMD ["node", "dist/server.js"]
